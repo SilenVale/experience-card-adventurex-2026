@@ -1,10 +1,20 @@
-# Dify 接口契约（暂不部署）
+# Dify 接口契约（P0）
 
-P0 只启用两个 Dify Workflow；Dify 是 AI 编排层，不保存产品主数据。
+P0 只启用两个 **已发布** 的 Dify Workflow；Dify 只负责 AI 编排，产品数据仍只保存在 Supabase。
+
+> 安全边界：浏览器永远不直接调用 Dify，也不保存 Dify Key。网页 → Supabase Edge Function → Dify Workflow。
 
 ## 1. `dify-generate-card`
 
-输入：`raw_experience`、`answers`。输出必须是 JSON：
+在 Dify 新建 Workflow 应用，发布后命名为“Experience Card · 生成经验卡”。
+
+输入变量（均为文本、必填）：
+
+- `raw_experience`
+- `answers_json`
+- `instruction`
+
+输出节点必须暴露 `result`（文本），内容必须是下列 JSON：
 
 ```json
 {
@@ -12,17 +22,33 @@ P0 只启用两个 Dify Workflow；Dify 是 AI 编排层，不保存产品主数
   "one_liner": "一句结果或价值",
   "problem": "当时要解决的问题",
   "actions": "关键动作",
+  "pitfall": "失败、调整或注意项；没有则写待作者补充",
   "result": "结果",
+  "suitable_for": "适合谁；不清楚则写待作者补充",
   "boundary": "适用边界",
-  "pitfall": "失败或注意项"
+  "source_map": {
+    "title": ["raw_experience"],
+    "problem": ["answer_1"],
+    "actions": ["answer_3"],
+    "result": ["answer_5"]
+  }
 }
 ```
 
-规则：仅整理用户输入；缺信息要明确写“待作者补充”，不得补造证据、结果或适用范围。
+系统提示词核心规则：仅整理 `raw_experience` 与 `answers_json` 中已经出现的内容；缺信息写“待作者补充”；不得补造证据、量化结果、适用人群或外部事实。`source_map` 的值只能是 `raw_experience`、`answer_1` 至 `answer_5` 的数组。
 
 ## 2. `dify-trial-match`
 
-输入：已发布经验卡、`user_situation`、`user_constraints`。输出必须是 JSON：
+在 Dify 新建第二个 Workflow 应用，发布后命名为“Experience Card · 情境试用”。
+
+输入变量（均为文本、必填）：
+
+- `card_json`
+- `user_situation`
+- `user_constraints`
+- `instruction`
+
+输出节点必须暴露 `result`（文本），内容必须是下列 JSON：
 
 ```json
 {
@@ -33,10 +59,23 @@ P0 只启用两个 Dify Workflow；Dify 是 AI 编排层，不保存产品主数
 }
 ```
 
-规则：不保证成功；情境信息不足时选“谨慎尝试”或“暂不适合”。
+系统提示词核心规则：只能依据 `card_json` 已确认的内容判断；不保证成功；情境信息不足时选“谨慎尝试”或“暂不适合”；`micro_action` 必须是当天可做的一步，不得给高风险专业建议。
 
-## 部署前的密钥规则
+## 发布与密钥配置
 
-- Dify Key 仅设置为 Supabase Edge Function Secret：`DIFY_API_KEY`。
+- 两个 Workflow 都必须点击 Dify 的“发布”后再复制 API Key；未发布的 Workflow 不能被 `/workflows/run` 调用。
+- Dify Key 仅设置为 Supabase Edge Function Secrets：
+  - `DIFY_GENERATE_CARD_API_KEY`
+  - `DIFY_TRIAL_MATCH_API_KEY`
+- 可选：若不是 Dify Cloud，再设置 `DIFY_BASE_URL`；Dify Cloud 默认值为 `https://api.dify.ai/v1`。
 - 浏览器 `.env` 只允许 Supabase URL 和 anon key；绝不出现 Dify Key。
+- Supabase 中部署两个函数：`dify-generate-card`、`dify-trial-match`。两者均启用 JWT 验证；生成函数还要求登录用户与 `sharing_consent=true`。
 - 部署后先用一张脱敏演示卡、一个测试账户验证，不批量调用。
+
+## 上线验收（必须全部通过）
+
+1. 在 Supabase SQL Editor 执行 `SUPABASE-DIFY-READINESS.sql`，确认 `source_map` 与 `sharing_consent` 两列存在。
+2. 生成一张新卡：结果中每个字段有来源映射，明显缺失的信息显示“待作者补充”。
+3. 对该已发布卡提交“适合”和“不适合”两种情境：结果枚举只能是 `适合尝试 / 谨慎尝试 / 暂不适合`。
+4. 暂时移除一个 Dify Secret 再试：前端必须报“AI 暂不可用”，不能伪造成功结果。
+5. 匿名访问者只能读公开卡，不能读取具体 `trial_feedback` 内容；卡作者登录后才可读到自己卡片的反馈。
