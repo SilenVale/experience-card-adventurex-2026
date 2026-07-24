@@ -45,6 +45,29 @@ export default function CommunityPage() {
             </p>
           </div>
 
+          <section className="mb-9 rounded-2xl border border-theme-border bg-theme-bg-card p-5 md:p-6">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <span className="chapter-label">公开构建中的反馈</span>
+                <h2 className="mt-2 text-lg font-bold text-theme-text">经验不是发完就结束。</h2>
+                <p className="mt-1 text-sm text-theme-text-secondary">这三条是展示用的共创样本：外部反馈会先被作者判断，再进入下一版经验卡。</p>
+              </div>
+              <span className="tag-ivory rounded-full px-2 py-1 text-[10px]">示例反馈 · 不读取平台评论</span>
+            </div>
+            <div className="mt-5 grid gap-3 md:grid-cols-3">
+              {[
+                ['一位学生体验者', '“我最需要的不是更多方法，而是知道这套方法在资源很少时还能不能先试。”'],
+                ['一位独立创作者', '“希望看到失败时具体改了什么，而不是只看到最后结果。”'],
+                ['一位活动组织者', '“我会先带着自己的时间限制试一次，再回来告诉作者哪里不适用。”'],
+              ].map(([author, quote]) => (
+                <blockquote key={author} className="rounded-xl bg-theme-bg-card-alt p-4">
+                  <p className="text-sm leading-relaxed text-theme-text">{quote}</p>
+                  <footer className="mt-3 text-[11px] text-theme-text-muted">— {author}</footer>
+                </blockquote>
+              ))}
+            </div>
+          </section>
+
           {/* Tabs */}
           <div className="flex items-center gap-2 mb-8 overflow-x-auto pb-2">
             <div className="flex items-center rounded-full px-1 py-1 gap-0.5 bg-theme-bg-card">

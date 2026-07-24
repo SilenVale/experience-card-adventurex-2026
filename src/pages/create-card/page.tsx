@@ -5,6 +5,7 @@ import { getExperienceCard, saveExperienceCard, updateExperienceCard, type CardS
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import LoginModal from '@/components/feature/LoginModal';
+import SharePanel from '@/components/feature/SharePanel';
 
 type CreateStep = 1 | 2 | 3 | 'success';
 
@@ -40,6 +41,7 @@ export default function CreateCardPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [savedCardId, setSavedCardId] = useState<string | null>(null);
   const [savedStatus, setSavedStatus] = useState<CardStatus | null>(null);
+  const [shareOpen, setShareOpen] = useState(false);
   const [editingCardId, setEditingCardId] = useState<string | null>(null);
   const [loadingDraft, setLoadingDraft] = useState(Boolean(draftId));
 
@@ -424,40 +426,46 @@ export default function CreateCardPage() {
             </div>
           )}
 
-          {/* Success State */}
+          {/* Success State: a collected experience, not a UUID receipt */}
           {step === 'success' && (
-            <div className="text-center py-12">
-              <div className="w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-                <div className="w-14 h-14 rounded-full border border-theme-gold-light flex items-center justify-center">
-                  <i className="ri-check-line text-2xl text-theme-gold" />
-                </div>
+            <div className="py-8 text-center md:py-12">
+              <div className="mx-auto mb-6 flex h-12 w-12 items-center justify-center rounded-full border border-theme-accent-light text-theme-accent">
+                <i className="ri-bookmark-line text-xl" />
               </div>
-              <h2 className={`font-heading font-bold ${themeText} text-xl mb-2`}>
-                {savedStatus === 'published' ? '你的经验名片已发布。' : '你的经验名片已经保存为草稿。'}
+              <span className="chapter-label">收录完成</span>
+              <h2 className={`mt-3 font-heading text-2xl font-black ${themeText} md:text-3xl`}>
+                {savedStatus === 'published' ? '这张经验名片已经公开。' : '这段走过的路，已收进你的名片册。'}
               </h2>
-              {savedCardId && (
-                <p className="text-xs text-theme-text-muted mb-2 font-mono">
-                  ID: {savedCardId}
-                </p>
-              )}
-              <p className={`text-sm ${themeTextSec} mb-8`}>
+              <p className={`mx-auto mt-3 max-w-md text-sm leading-relaxed ${themeTextSec}`}>
                 {savedStatus === 'published'
-                  ? '已写入 Supabase，并已公开展示在经验广场。'
-                  : '已写入 Supabase。草稿仅你可见，随时可以继续编辑或发布。'}
+                  ? '它现在会出现在经验广场，别人可以带着自己的限制决定是否试用。'
+                  : '草稿只有你可见。等你准备好，再把它发布给真正需要的人。'}
               </p>
-              <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                <button
-                  onClick={() => navigate('/')}
-                  className={`px-6 py-2.5 ${themeAccent} text-white rounded-full text-sm font-heading font-semibold cursor-pointer whitespace-nowrap hover:bg-theme-accent-hover transition-colors`}
-                >
-                  {savedStatus === 'published' ? '去经验广场查看' : '去经验广场看看'}
+
+              <div className="collection-card-enter mx-auto mt-8 max-w-sm rounded-2xl border border-theme-border bg-theme-bg-card p-5 text-left shadow-[0_18px_48px_rgba(54,35,30,0.10)]">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="tag-red rounded-full px-2 py-0.5 text-[10px]">{savedStatus === 'published' ? 'v1 · 已发布' : '私密草稿'}</span>
+                  <span className="text-[10px] text-theme-text-muted">Experience Card</span>
+                </div>
+                <h3 className={`mt-5 text-xl font-bold leading-snug ${themeText}`}>{draft.title || '我的经验名片'}</h3>
+                <p className={`mt-3 text-sm leading-relaxed ${themeTextSec}`}>{draft.result || draft.oneLiner || draft.problem}</p>
+                {draft.suitableFor && <p className="mt-5 border-t border-theme-border pt-3 text-xs leading-relaxed text-theme-text-secondary"><span className="mr-2 text-theme-accent">适合</span>{draft.suitableFor}</p>}
+              </div>
+
+              <div className="mx-auto mt-7 flex max-w-md flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-center">
+                <button onClick={() => navigate('/my-cards')} className={`px-5 py-2.5 border ${themeBorder} ${themeText} rounded-full text-sm font-semibold hover:bg-theme-accent-subtle`}>
+                  收进我的名片册
                 </button>
-                <button
-                  onClick={() => navigate('/my-cards')}
-                  className={`px-6 py-2.5 border ${themeBorder} ${themeText} rounded-full text-sm cursor-pointer whitespace-nowrap hover:bg-theme-accent-subtle transition-colors`}
-                >
-                  查看我的名片
-                </button>
+                {savedStatus === 'published' ? (
+                  <button onClick={() => navigate('/')} className={`px-5 py-2.5 ${themeAccent} text-white rounded-full text-sm font-semibold hover:bg-theme-accent-hover`}>
+                    去经验广场查看
+                  </button>
+                ) : (
+                  <button onClick={() => savedCardId && navigate(`/create?draft=${savedCardId}`)} className={`px-5 py-2.5 ${themeAccent} text-white rounded-full text-sm font-semibold hover:bg-theme-accent-hover`}>
+                    继续编辑并发布
+                  </button>
+                )}
+                {savedStatus === 'published' && <button onClick={() => setShareOpen(true)} className="px-5 py-2.5 text-sm font-semibold text-theme-accent hover:underline">分享这段经验</button>}
               </div>
             </div>
           )}
@@ -470,6 +478,13 @@ export default function CreateCardPage() {
         onClose={() => setLoginOpen(false)}
         reason={loginReason}
       />
+      {savedCardId && (
+        <SharePanel
+          isOpen={shareOpen}
+          onClose={() => setShareOpen(false)}
+          card={{ id: savedCardId, title: draft.title || '我的经验名片', oneLiner: draft.oneLiner || draft.result || draft.problem, suitableFor: draft.suitableFor, result: draft.result }}
+        />
+      )}
     </div>
   );
 }
