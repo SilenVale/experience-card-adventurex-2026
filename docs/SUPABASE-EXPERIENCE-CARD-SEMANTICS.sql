@@ -19,17 +19,24 @@ comment on column public.experience_cards.suitable_for is '这段经验适合尝
 -- 写入明确占位文本，而不是清空它。现有表对 suitable_for 设有 NOT NULL 约束。
 -- 这样页面不会把问题错误冒充成适用人群，也不会违反已有约束。
 -- 已经按新语义写入的记录不受影响。
+
+-- 第一步：旧版卡片的 problem 为空，且旧 suitable_for 实际承载了当时的问题。
+-- 迁移问题后，用占位文本替代原 suitable_for，避免误把问题展示成适用对象。
 update public.experience_cards
 set
-  problem = coalesce(nullif(btrim(problem), ''), nullif(btrim(suitable_for), '')),
-  result = coalesce(nullif(btrim(result), ''), nullif(btrim(one_liner), '')),
-  suitable_for = case
-    when nullif(btrim(problem), '') is null then '作者尚未补充适合对象'
-    else coalesce(nullif(btrim(suitable_for), ''), '作者尚未补充适合对象')
-  end
-where nullif(btrim(problem), '') is null
-   or nullif(btrim(result), '') is null
-   or nullif(btrim(suitable_for), '') is null;
+  problem = coalesce(nullif(btrim(suitable_for), ''), '作者尚未补充当时的问题'),
+  suitable_for = '作者尚未补充适合对象'
+where nullif(btrim(problem), '') is null;
+
+-- 第二步：旧版卡片将最终结果存进 one_liner，补回独立 result。
+update public.experience_cards
+set result = coalesce(nullif(btrim(one_liner), ''), '作者尚未补充最终结果')
+where nullif(btrim(result), '') is null;
+
+-- 第三步：为任意历史空白值补占位，兼容 NOT NULL 约束；可重复安全执行。
+update public.experience_cards
+set suitable_for = '作者尚未补充适合对象'
+where nullif(btrim(suitable_for), '') is null;
 
 commit;
 
