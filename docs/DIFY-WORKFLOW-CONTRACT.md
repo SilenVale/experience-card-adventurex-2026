@@ -37,6 +37,16 @@ P0 只启用两个 **已发布** 的 Dify Workflow；Dify 只负责 AI 编排，
 
 系统提示词核心规则：仅整理 `raw_experience` 与 `answers_json` 中已经出现的内容；缺信息写“待作者补充”；不得补造证据、量化结果、适用人群或外部事实。`source_map` 的值只能是 `raw_experience`、`answer_1` 至 `answer_5` 的数组。
 
+推荐的最小 Workflow 结构：`Start（3 个文本变量） → LLM → End`。在 LLM 的系统提示词粘贴：
+
+```text
+你是 Experience Card 的编辑助手。只根据用户提供的 raw_experience 与 answers_json 整理经验；绝不猜测、补写外部事实或承诺效果。信息缺失就写“待作者补充”。
+只输出合法 JSON，不要 Markdown、解释或代码围栏。JSON 必须包含：title, one_liner, problem, actions, pitfall, result, suitable_for, boundary, source_map。
+source_map 的每个 value 只能是 raw_experience、answer_1、answer_2、answer_3、answer_4、answer_5 组成的数组。
+```
+
+LLM 用户消息粘贴：`原始经历：{{#raw_experience#}}\n五问答案：{{#answers_json#}}\n补充要求：{{#instruction#}}`。End 节点新增文本输出：`result = LLM 的 text 输出`。
+
 ## 2. `dify-trial-match`
 
 在 Dify 新建第二个 Workflow 应用，发布后命名为“Experience Card · 情境试用”。
@@ -60,6 +70,16 @@ P0 只启用两个 **已发布** 的 Dify Workflow；Dify 只负责 AI 编排，
 ```
 
 系统提示词核心规则：只能依据 `card_json` 已确认的内容判断；不保证成功；情境信息不足时选“谨慎尝试”或“暂不适合”；`micro_action` 必须是当天可做的一步，不得给高风险专业建议。
+
+推荐的最小 Workflow 结构：`Start（4 个文本变量） → LLM → End`。在 LLM 的系统提示词粘贴：
+
+```text
+你是 Experience Card 的情境试用助手。只能依据 card_json 中的已确认经验判断，不得补造卡片没有写过的事实或承诺成功。
+只输出合法 JSON，不要 Markdown、解释或代码围栏。JSON 字段必须是：trial_result, reason, micro_action, boundary_note。
+trial_result 只能是“适合尝试”“谨慎尝试”“暂不适合”之一。情境或约束信息不充分时，优先“谨慎尝试”或“暂不适合”。micro_action 必须是当天可执行且低风险的一步。
+```
+
+LLM 用户消息粘贴：`经验卡：{{#card_json#}}\n试用者情境：{{#user_situation#}}\n限制：{{#user_constraints#}}\n补充要求：{{#instruction#}}`。End 节点新增文本输出：`result = LLM 的 text 输出`。
 
 ## 发布与密钥配置
 
