@@ -25,10 +25,11 @@ set
   result = coalesce(nullif(btrim(result), ''), nullif(btrim(one_liner), '')),
   suitable_for = case
     when nullif(btrim(problem), '') is null then '作者尚未补充适合对象'
-    else suitable_for
+    else coalesce(nullif(btrim(suitable_for), ''), '作者尚未补充适合对象')
   end
 where nullif(btrim(problem), '') is null
-   or nullif(btrim(result), '') is null;
+   or nullif(btrim(result), '') is null
+   or nullif(btrim(suitable_for), '') is null;
 
 commit;
 
