@@ -35,7 +35,6 @@ Deno.serve(async (request) => {
         card_json: JSON.stringify(card),
         user_situation: String(body.situation),
         user_constraints: String(body.constraints ?? ''),
-        instruction: 'Return only a JSON object with trial_result (适合尝试/谨慎尝试/暂不适合), reason, micro_action, boundary_note. Base every statement only on card_json and the user input. Never promise success. If the card lacks a necessary condition, choose 谨慎尝试 or 暂不适合 and explain the missing information.',
       },
     });
 

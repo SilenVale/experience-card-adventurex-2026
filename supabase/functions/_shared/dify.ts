@@ -1,6 +1,6 @@
 const difyBaseUrl = (Deno.env.get('DIFY_BASE_URL') ?? 'https://api.dify.ai/v1').replace(/\/$/, '');
 
-export type DifyWorkflowKey = 'DIFY_GENERATE_CARD_API_KEY' | 'DIFY_TRIAL_MATCH_API_KEY';
+export type DifyWorkflowKey = 'DIFY_API_KEY' | 'DIFY_TRIAL_MATCH_API_KEY';
 
 function tryParseObject(value: unknown) {
   if (typeof value === 'object' && value !== null) return value as Record<string, unknown>;

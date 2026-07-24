@@ -24,7 +24,7 @@ Deno.serve(async (request) => {
     }
 
     const card = await runDifyWorkflow({
-      apiKeyName: 'DIFY_GENERATE_CARD_API_KEY',
+      apiKeyName: 'DIFY_API_KEY',
       user: `experience-card:${user.id}`,
       inputs: {
         raw_experience: String(body.raw_experience),

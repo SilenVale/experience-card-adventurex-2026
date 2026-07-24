@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { getExperienceCard, saveExperienceCard, updateExperienceCard, type CardStatus } from '@/lib/experienceCards';
+import { supabase } from '@/lib/supabase';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import LoginModal from '@/components/feature/LoginModal';
