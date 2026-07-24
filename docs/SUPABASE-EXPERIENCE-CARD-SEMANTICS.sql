@@ -15,15 +15,16 @@ comment on column public.experience_cards.result is '作者最终得到的结果
 comment on column public.experience_cards.suitable_for is '这段经验适合尝试的人和场景。';
 
 -- 旧版 P0 将 problem 误存于 suitable_for、将 result 存于 one_liner。
--- 对旧记录：把旧值迁往 problem / result，并清空无法可信推断的 suitable_for。
--- 这样页面宁可显示“作者尚未补充适合对象”，也不会把问题错误冒充成适用人群。
+-- 对旧记录：把旧值迁往 problem / result；suitable_for 在旧数据中无法可信推断时，
+-- 写入明确占位文本，而不是清空它。现有表对 suitable_for 设有 NOT NULL 约束。
+-- 这样页面不会把问题错误冒充成适用人群，也不会违反已有约束。
 -- 已经按新语义写入的记录不受影响。
 update public.experience_cards
 set
   problem = coalesce(nullif(btrim(problem), ''), nullif(btrim(suitable_for), '')),
   result = coalesce(nullif(btrim(result), ''), nullif(btrim(one_liner), '')),
   suitable_for = case
-    when nullif(btrim(problem), '') is null then null
+    when nullif(btrim(problem), '') is null then '作者尚未补充适合对象'
     else suitable_for
   end
 where nullif(btrim(problem), '') is null
