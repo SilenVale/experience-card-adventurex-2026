@@ -1,0 +1,265 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+SC:wght@400;500;600;700;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ================================================================
+   StyleSystem Theme Variables
+   Light mode (default) & Dark mode (.dark)
+   ================================================================ */
+
+:root {
+  /* Backgrounds */
+  --bg-primary: #FAF7F3;
+  --bg-secondary: #FFFFFF;
+  --bg-card: #FFFFFF;
+  --bg-card-alt: #F5F0EB;
+
+  /* Text */
+  --text-primary: #1A1514;
+  --text-secondary: #8C7A74;
+  --text-muted: #A89A95;
+
+  /* Borders */
+  --border-primary: rgba(0, 0, 0, 0.06);
+  --border-secondary: rgba(0, 0, 0, 0.04);
+  --border-accent: rgba(230, 59, 48, 0.10);
+
+  /* Accent */
+  --accent: #E63B30;
+  --accent-hover: #C72D24;
+  --accent-light: rgba(230, 59, 48, 0.08);
+  --accent-subtle: rgba(230, 59, 48, 0.06);
+
+  /* Gold */
+  --gold: #B8955B;
+  --gold-dark: #8C6E3C;
+  --gold-light: rgba(184, 149, 91, 0.10);
+  --gold-subtle: rgba(184, 149, 91, 0.06);
+
+  /* Shadows (subtle, no harsh shadows) */
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.04);
+  --shadow-nav: 0 1px 2px rgba(0, 0, 0, 0.04);
+
+  /* Transitions */
+  --theme-transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+}
+
+.dark {
+  /* Backgrounds */
+  --bg-primary: #11100F;
+  --bg-secondary: #160B0B;
+  --bg-card: #1A1312;
+  --bg-card-alt: #1E1615;
+
+  /* Text */
+  --text-primary: #F5F0EA;
+  --text-secondary: #A89A95;
+  --text-muted: #8C7A74;
+
+  /* Borders */
+  --border-primary: rgba(230, 59, 48, 0.08);
+  --border-secondary: rgba(230, 59, 48, 0.04);
+  --border-accent: rgba(230, 59, 48, 0.12);
+
+  /* Accent */
+  --accent: #E63B30;
+  --accent-hover: #D43D32;
+  --accent-light: rgba(230, 59, 48, 0.12);
+  --accent-subtle: rgba(230, 59, 48, 0.06);
+
+  /* Gold */
+  --gold: #B8955B;
+  --gold-dark: #9E7D48;
+  --gold-light: rgba(184, 149, 91, 0.15);
+  --gold-subtle: rgba(184, 149, 91, 0.08);
+
+  /* Shadows */
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.12);
+  --shadow-nav: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+/* ================================================================
+   Base Styles
+   ================================================================ */
+
+@layer base {
+  body {
+    font-family: 'Inter', 'Noto Sans SC', sans-serif;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+
+  ::selection {
+    background-color: rgba(230, 59, 48, 0.15);
+    color: var(--text-primary);
+  }
+}
+
+/* ================================================================
+   Component Utilities
+   ================================================================ */
+
+@layer components {
+  .chapter-label {
+    font-family: 'Inter', 'Noto Sans SC', sans-serif;
+    font-size: 0.65rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(230, 59, 48, 0.7);
+    white-space: nowrap;
+  }
+
+  .mono-label {
+    font-family: 'Inter', monospace;
+    font-size: 0.65rem;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .btn-red {
+    background-color: var(--accent);
+    color: white;
+    border-radius: 9999px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+  }
+  .btn-red:hover {
+    background-color: var(--accent-hover);
+  }
+
+  .btn-outline {
+    border: 1px solid var(--border-primary);
+    color: var(--text-primary);
+    border-radius: 9999px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+  }
+  .btn-outline:hover {
+    border-color: rgba(230, 59, 48, 0.3);
+    background-color: var(--accent-subtle);
+  }
+
+  .tag-red {
+    background-color: var(--accent-subtle);
+    color: var(--accent);
+    border: 1px solid rgba(230, 59, 48, 0.12);
+  }
+
+  .tag-gold {
+    background-color: var(--gold-subtle);
+    color: var(--gold-dark);
+    border: 1px solid var(--gold-light);
+  }
+
+  .tag-ivory {
+    background-color: rgba(140, 122, 116, 0.06);
+    color: rgba(140, 122, 116, 0.7);
+    border: 1px solid rgba(140, 122, 116, 0.1);
+  }
+
+  .tag-boundary {
+    background-color: rgba(140, 122, 116, 0.04);
+    color: rgba(140, 122, 116, 0.55);
+    border: 1px solid rgba(140, 122, 116, 0.08);
+  }
+
+  .card-white {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-primary);
+    border-radius: 0.75rem;
+    overflow: hidden;
+    transition: all 0.3s ease, var(--theme-transition);
+  }
+  .card-white:hover {
+    border-color: rgba(230, 59, 48, 0.12);
+    transform: translateY(-2px);
+  }
+
+  .card-featured {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-primary);
+    border-radius: 0.75rem;
+    overflow: hidden;
+    transition: all 0.3s ease, var(--theme-transition);
+  }
+  .card-featured:hover {
+    border-color: var(--gold-light);
+  }
+
+  .hover-underline {
+    position: relative;
+  }
+  .hover-underline::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    width: 0;
+    height: 1px;
+    background-color: currentColor;
+    transition: width 0.3s ease;
+  }
+  .hover-underline:hover::after {
+    width: 100%;
+  }
+
+  /* Title reveal */
+  .reveal-title {
+    clip-path: inset(0 100% 0 0);
+    animation: revealText 1s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+    animation-delay: 0.2s;
+  }
+  @keyframes revealText {
+    to { clip-path: inset(0 0 0 0); }
+  }
+
+  /* Fade up */
+  .fade-up {
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.7s ease, transform 0.7s ease;
+  }
+  .fade-up.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .fade-up-delay-1 { transition-delay: 0.1s; }
+  .fade-up-delay-2 { transition-delay: 0.2s; }
+  .fade-up-delay-3 { transition-delay: 0.3s; }
+  .fade-up-delay-4 { transition-delay: 0.4s; }
+
+  /* Form anti-spam honeypot */
+  .hp-field {
+    position: absolute;
+    left: -9999px;
+    opacity: 0;
+    height: 0;
+    width: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+}
+
+/* ================================================================
+   Tailwind Extensions
+   ================================================================ */
+
+@layer utilities {
+  .font-heading {
+    font-family: 'Inter', 'Noto Sans SC', sans-serif;
+  }
+  .font-label {
+    font-family: 'Inter', 'Noto Sans SC', sans-serif;
+  }
+  .tracking-tighter2 {
+    letter-spacing: -0.04em;
+  }
+}
