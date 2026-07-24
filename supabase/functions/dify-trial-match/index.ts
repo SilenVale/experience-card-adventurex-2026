@@ -19,7 +19,7 @@ Deno.serve(async (request) => {
     const database = createClient(supabaseUrl, supabaseAnonKey);
     const { data: card, error } = await database
       .from('experience_cards')
-      .select('title, one_liner, background, actions_done, suitable_for, boundary, pitfall')
+      .select('title, one_liner, problem, background, actions_done, pitfall, result, suitable_for, boundary, source_map')
       .eq('id', body.card_id)
       .eq('status', 'published')
       .eq('is_public', true)
@@ -29,14 +29,26 @@ Deno.serve(async (request) => {
     if (!card) return json({ error: 'Published card not found' }, 404);
 
     const result = await runDifyWorkflow({
-      card,
-      user_situation: body.situation,
-      user_constraints: body.constraints ?? '',
-      instruction: 'Return only a JSON object with trial_result (适合尝试/谨慎尝试/暂不适合), reason, micro_action, boundary_note. Never promise success.',
+      apiKeyName: 'DIFY_TRIAL_MATCH_API_KEY',
+      user: `experience-card:trial:${crypto.randomUUID()}`,
+      inputs: {
+        card_json: JSON.stringify(card),
+        user_situation: String(body.situation),
+        user_constraints: String(body.constraints ?? ''),
+        instruction: 'Return only a JSON object with trial_result (适合尝试/谨慎尝试/暂不适合), reason, micro_action, boundary_note. Base every statement only on card_json and the user input. Never promise success. If the card lacks a necessary condition, choose 谨慎尝试 or 暂不适合 and explain the missing information.',
+      },
     });
+
+    const trialResults = ['适合尝试', '谨慎尝试', '暂不适合'];
+    const requiredFields = ['reason', 'micro_action', 'boundary_note'];
+    if (!trialResults.includes(String(result.trial_result)) || requiredFields.some((field) => typeof result[field] !== 'string' || !String(result[field]).trim())) {
+      return json({ error: 'DIFY_INVALID_OUTPUT' }, 502);
+    }
 
     return new Response(JSON.stringify({ result }), { status: 200, headers: corsHeaders });
   } catch (error) {
-    return json({ error: error instanceof Error ? error.message : 'Unexpected error' }, 500);
+    const message = error instanceof Error ? error.message : 'Unexpected error';
+    const status = message === 'DIFY_NOT_CONFIGURED' ? 503 : message === 'DIFY_TIMEOUT' ? 504 : 502;
+    return json({ error: message }, status);
   }
 });

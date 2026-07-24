@@ -19,18 +19,29 @@ Deno.serve(async (request) => {
     if (!user) return json({ error: 'Unauthorized' }, 401);
 
     const body = await request.json();
-    if (!body?.raw_experience || !body?.answers) {
-      return json({ error: 'raw_experience and answers are required' }, 400);
+    if (!body?.raw_experience || !body?.answers || body?.sharing_consent !== true) {
+      return json({ error: 'raw_experience, answers and sharing_consent are required' }, 400);
     }
 
     const card = await runDifyWorkflow({
-      raw_experience: body.raw_experience,
-      answers: body.answers,
-      instruction: 'Return only a JSON object with title, one_liner, problem, actions, result, boundary, pitfall. Do not invent facts.',
+      apiKeyName: 'DIFY_GENERATE_CARD_API_KEY',
+      user: `experience-card:${user.id}`,
+      inputs: {
+        raw_experience: String(body.raw_experience),
+        answers_json: JSON.stringify(body.answers),
+        instruction: 'Return only a JSON object with title, one_liner, problem, actions, pitfall, result, suitable_for, boundary, source_map. Do not invent facts. source_map maps each field to one or more of raw_experience, answer_1, answer_2, answer_3, answer_4, answer_5. If a fact is missing, write 待作者补充 instead of guessing.',
+      },
     });
+
+    const requiredFields = ['title', 'one_liner', 'problem', 'actions', 'pitfall', 'result', 'suitable_for', 'boundary'];
+    if (requiredFields.some((field) => typeof card[field] !== 'string' || !String(card[field]).trim())) {
+      return json({ error: 'DIFY_INVALID_OUTPUT' }, 502);
+    }
 
     return new Response(JSON.stringify({ card }), { status: 200, headers: corsHeaders });
   } catch (error) {
-    return json({ error: error instanceof Error ? error.message : 'Unexpected error' }, 500);
+    const message = error instanceof Error ? error.message : 'Unexpected error';
+    const status = message === 'DIFY_NOT_CONFIGURED' ? 503 : message === 'DIFY_TIMEOUT' ? 504 : 502;
+    return json({ error: message }, status);
   }
 });

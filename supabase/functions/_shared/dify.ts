@@ -1,5 +1,6 @@
 const difyBaseUrl = (Deno.env.get('DIFY_BASE_URL') ?? 'https://api.dify.ai/v1').replace(/\/$/, '');
-const difyApiKey = Deno.env.get('DIFY_API_KEY');
+
+export type DifyWorkflowKey = 'DIFY_GENERATE_CARD_API_KEY' | 'DIFY_TRIAL_MATCH_API_KEY';
 
 function tryParseObject(value: unknown) {
   if (typeof value === 'object' && value !== null) return value as Record<string, unknown>;
@@ -18,25 +19,47 @@ function tryParseObject(value: unknown) {
   }
 }
 
-export async function runDifyWorkflow(inputs: Record<string, unknown>) {
-  if (!difyApiKey) throw new Error('DIFY_API_KEY is not configured');
+export async function runDifyWorkflow({
+  apiKeyName,
+  inputs,
+  user,
+}: {
+  apiKeyName: DifyWorkflowKey;
+  inputs: Record<string, unknown>;
+  user: string;
+}) {
+  const difyApiKey = Deno.env.get(apiKeyName);
+  if (!difyApiKey) throw new Error('DIFY_NOT_CONFIGURED');
 
-  const response = await fetch(`${difyBaseUrl}/workflows/run`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${difyApiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ inputs, response_mode: 'blocking', user: 'experience-card-web' }),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30_000);
 
-  const payload = await response.json();
-  if (!response.ok) {
-    throw new Error(payload?.message ?? 'Dify workflow request failed');
+  try {
+    const response = await fetch(`${difyBaseUrl}/workflows/run`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${difyApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ inputs, response_mode: 'blocking', user }),
+      signal: controller.signal,
+    });
+
+    const payload = await response.json();
+    if (!response.ok || payload?.data?.status === 'failed') {
+      throw new Error('DIFY_WORKFLOW_FAILED');
+    }
+
+    const outputs = payload?.data?.outputs;
+    const result = tryParseObject(outputs?.card_json ?? outputs?.result ?? outputs?.text ?? outputs);
+    if (!result) throw new Error('DIFY_INVALID_OUTPUT');
+    return result;
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error('DIFY_TIMEOUT');
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
   }
-
-  const outputs = payload?.data?.outputs;
-  const result = tryParseObject(outputs?.card_json ?? outputs?.result ?? outputs?.text ?? outputs);
-  if (!result) throw new Error('Dify returned no valid JSON object');
-  return result;
 }

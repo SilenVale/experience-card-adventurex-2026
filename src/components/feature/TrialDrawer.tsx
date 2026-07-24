@@ -4,6 +4,7 @@ import {
   saveTrialFeedback,
   type TrialResult,
 } from '@/lib/experienceCards';
+import { supabase } from '@/lib/supabase';
 
 interface TrialDrawerProps {
   isOpen: boolean;
@@ -21,21 +22,39 @@ export default function TrialDrawer({ isOpen, onClose, cardTitle, cardId }: Tria
   const [constraints, setConstraints] = useState('');
   const [result, setResult] = useState<TrialResult | null>(null);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
 
-  // ============================================================
-  // 🔮 FUTURE DIFY INTEGRATION POINT B:
-  // 已发布经验卡 + 试用者情境/限制 → 试用结果 JSON
-  // 当前为规则版演示，未来替换为:
-  // supabase.functions.invoke('dify-trial-match', { body: { cardId, context, constraints } })
-  // Dify Workflow 返回结构化 JSON: { match, reasons[], microAction, notSuitable[] }
-  // ============================================================
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!context.trim()) return;
     setPhase('analyzing');
-    setTimeout(() => {
-      setResult(generateDemoTrialResult(constraints));
-      setPhase('result');
-    }, 1500);
+    setAnalysisError(null);
+
+    if (!isUuid(cardId)) {
+      setTimeout(() => {
+        setResult(generateDemoTrialResult(constraints));
+        setPhase('result');
+      }, 700);
+      return;
+    }
+
+    const { data, error } = await supabase.functions.invoke('dify-trial-match', {
+      body: { card_id: cardId, situation: context, constraints },
+    });
+
+    if (error || !data?.result) {
+      setAnalysisError('AI 暂时无法分析这次试用。请稍后重试；不会用规则模板伪装成 AI 结果。');
+      setPhase('input');
+      return;
+    }
+
+    const aiResult = data.result as Record<string, unknown>;
+    setResult({
+      trialResult: aiResult.trial_result as TrialResult['trialResult'],
+      reason: String(aiResult.reason),
+      microAction: String(aiResult.micro_action),
+      boundaryNote: String(aiResult.boundary_note),
+    });
+    setPhase('result');
   };
 
   const handleReset = () => {
@@ -44,6 +63,7 @@ export default function TrialDrawer({ isOpen, onClose, cardTitle, cardId }: Tria
     setConstraints('');
     setResult(null);
     setSaveState('idle');
+    setAnalysisError(null);
   };
 
   const handleSaveFeedback = async () => {
@@ -139,6 +159,7 @@ export default function TrialDrawer({ isOpen, onClose, cardTitle, cardId }: Tria
               >
                 分析我的情境
               </button>
+              {analysisError && <p className="mt-3 text-xs leading-relaxed text-theme-accent">{analysisError}</p>}
             </div>
           )}
 
@@ -155,7 +176,7 @@ export default function TrialDrawer({ isOpen, onClose, cardTitle, cardId }: Tria
             <div>
               <div className="flex items-center gap-2 mb-4">
                 <span className="text-[10px] text-theme-accent/65 uppercase tracking-wider">
-                  规则版演示分析
+                  {isUuid(cardId) ? 'AI 情境试用 · 请自行判断' : '规则版示例分析'}
                 </span>
               </div>
 

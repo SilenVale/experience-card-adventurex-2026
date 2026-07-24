@@ -35,6 +35,9 @@ export default function CreateCardPage() {
     suitableFor: '',
     boundary: '',
   });
+  const [sourceMap, setSourceMap] = useState<Record<string, string[]>>({});
+  const [sharingConsent, setSharingConsent] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
   const [loginReason, setLoginReason] = useState('');
   const [saving, setSaving] = useState(false);
@@ -88,6 +91,8 @@ export default function CreateCardPage() {
           suitableFor: card.suitable_for,
           boundary: card.boundary,
         });
+        setSourceMap(card.source_map ?? {});
+        setSharingConsent(Boolean(card.sharing_consent));
         setStep(3);
       } catch (error) {
         if (active) {
@@ -122,23 +127,35 @@ export default function CreateCardPage() {
     }
   };
 
-  // ============================================================
-  // 🔮 FUTURE DIFY INTEGRATION POINT A:
-  // 真实经历 + 五问答案 → 候选经验卡 JSON
-  // 当前为规则版 mock 生成，未来替换为:
-  // supabase.functions.invoke('dify-generate-card', { body: { rawExperience, answers } })
-  // Dify Workflow 返回结构化 JSON: { title, oneLiner, problem, actions, result, suitableFor, boundary }
-  // ============================================================
-  const handleGenerateDraft = () => {
-    setDraft({
-      title: '我的经验名片（草稿）',
-      oneLiner: answers[1] || '等待补充...',
-      problem: answers[1] || '等待补充...',
-      actions: answers[2] || '等待补充...',
-      result: answers[4] || '等待补充...',
-      suitableFor: '',
-      boundary: answers[5] || '等待补充...',
+  const handleGenerateDraft = async () => {
+    if (!sharingConsent) {
+      setSaveError('请先确认：你有权分享这段经历，并同意由 AI 仅基于你提供的内容生成候选卡。');
+      return;
+    }
+
+    setGenerating(true);
+    setSaveError(null);
+    const { data, error } = await supabase.functions.invoke('dify-generate-card', {
+      body: { raw_experience: rawExperience, answers, sharing_consent: true },
     });
+    setGenerating(false);
+
+    if (error || !data?.card) {
+      setSaveError('AI 暂时无法生成候选卡。请稍后重试；不会用规则模板伪装成 AI 结果。');
+      return;
+    }
+
+    const card = data.card as Record<string, unknown>;
+    setDraft({
+      title: String(card.title),
+      oneLiner: String(card.one_liner),
+      problem: String(card.problem),
+      actions: String(card.actions),
+      result: String(card.result),
+      suitableFor: String(card.suitable_for),
+      boundary: String(card.boundary),
+    });
+    setSourceMap((card.source_map as Record<string, string[]>) ?? {});
     setStep(3);
   };
 
@@ -164,6 +181,8 @@ export default function CreateCardPage() {
         result: draft.result.trim(),
         suitableFor: draft.suitableFor.trim(),
         boundary: draft.boundary.trim(),
+        sourceMap,
+        sharingConsent,
         status,
       };
       const data = editingCardId
@@ -250,9 +269,19 @@ export default function CreateCardPage() {
                 </p>
               </div>
 
+              <label className={`mb-5 flex cursor-pointer items-start gap-3 rounded-xl border ${themeBorder} ${themeCard} px-4 py-3 text-xs ${themeTextSec}`}>
+                <input
+                  type="checkbox"
+                  checked={sharingConsent}
+                  onChange={(event) => setSharingConsent(event.target.checked)}
+                  className="mt-0.5 h-4 w-4 accent-red-500"
+                />
+                <span>我确认我有权分享这段经历；我理解 AI 只能基于我的原话整理候选卡，我会在发布前逐项确认。</span>
+              </label>
+
               <button
                 onClick={handleStep1Next}
-                disabled={!rawExperience.trim()}
+                disabled={!rawExperience.trim() || !sharingConsent}
                 className={`w-full py-3 rounded-full text-sm font-heading font-semibold cursor-pointer whitespace-nowrap transition-all duration-200 ${
                   rawExperience.trim()
                     ? `${themeAccent} text-white hover:bg-theme-accent-hover`
@@ -291,7 +320,7 @@ export default function CreateCardPage() {
                 </div>
 
                 <div className={`${themeCard} border ${themeBorder} rounded-xl p-5 mb-4`}>
-                  <span className="text-[10px] text-theme-accent/60 mb-2 block">AI 追问</span>
+                  <span className="text-[10px] text-theme-accent/60 mb-2 block">关键追问</span>
                   <h3 className={`text-sm font-heading font-semibold ${themeText} mb-1`}>
                     {questions[currentQuestion].question}
                   </h3>
@@ -310,7 +339,7 @@ export default function CreateCardPage() {
 
               <div className={`flex items-center gap-2 mb-4 text-[10px] ${themeTextMuted}`}>
                 <i className="ri-robot-line text-xs text-theme-gold/50" />
-                AI 正在帮助你整理结构
+                完成后，AI 将只基于这些内容生成候选卡
               </div>
 
               <div className="flex gap-3">
@@ -331,7 +360,7 @@ export default function CreateCardPage() {
                       : 'bg-theme-accent-subtle text-theme-text-muted cursor-not-allowed'
                   }`}
                 >
-                  {currentQuestion === questions.length - 1 ? '生成经验名片草稿' : '下一题'}
+                  {currentQuestion === questions.length - 1 ? (generating ? 'AI 正在整理…' : '生成经验名片草稿') : '下一题'}
                 </button>
               </div>
             </div>
@@ -400,6 +429,12 @@ export default function CreateCardPage() {
                   />
                 </div>
               </div>
+
+              {Object.keys(sourceMap).length > 0 && (
+                <p className={`mb-5 text-[11px] leading-relaxed ${themeTextMuted}`}>
+                  来源：AI 仅引用了你的原始经历与五个回答进行整理。发布前请逐项确认是否准确。
+                </p>
+              )}
 
               {saveError && (
                 <div className="bg-theme-accent-subtle border border-theme-accent-light rounded-lg px-4 py-3 mb-4 text-xs text-theme-accent">
