@@ -8,13 +8,15 @@ interface LoginModalProps {
 }
 
 export default function LoginModal({ isOpen, onClose, reason }: LoginModalProps) {
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, resendConfirmation } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [requiresEmailConfirmation, setRequiresEmailConfirmation] = useState(false);
+  const [resendMessage, setResendMessage] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -30,7 +32,7 @@ export default function LoginModal({ isOpen, onClose, reason }: LoginModalProps)
       if (result.error) {
         setError(result.error);
       } else {
-        // Supabase may require email confirmation; show success
+        setRequiresEmailConfirmation(result.requiresEmailConfirmation);
         setSuccess(true);
       }
     } else {
@@ -51,6 +53,8 @@ export default function LoginModal({ isOpen, onClose, reason }: LoginModalProps)
     setPassword('');
     setError(null);
     setSuccess(false);
+    setRequiresEmailConfirmation(false);
+    setResendMessage(null);
     setMode('login');
   };
 
@@ -62,6 +66,14 @@ export default function LoginModal({ isOpen, onClose, reason }: LoginModalProps)
   const switchMode = () => {
     setMode((m) => (m === 'login' ? 'register' : 'login'));
     setError(null);
+  };
+
+  const handleResendConfirmation = async () => {
+    setLoading(true);
+    setResendMessage(null);
+    const result = await resendConfirmation(email.trim());
+    setResendMessage(result.error ? result.error : '确认邮件已重新发送，请检查收件箱和垃圾邮件。');
+    setLoading(false);
   };
 
   return (
@@ -82,15 +94,29 @@ export default function LoginModal({ isOpen, onClose, reason }: LoginModalProps)
                 注册成功
               </h3>
               <p className="text-xs text-theme-text-secondary mb-4">
-                如果启用了邮箱验证，请查收确认邮件后登录。
-                <br />
-                如未启用，你现在可以登录了。
+                {requiresEmailConfirmation
+                  ? `确认邮件已经发送到 ${email}。请先点击邮件里的确认链接，再回来登录。`
+                  : '账号已经创建并登录，可以继续使用。'}
               </p>
+              {requiresEmailConfirmation && (
+                <>
+                  <button
+                    onClick={handleResendConfirmation}
+                    disabled={loading}
+                    className="mb-3 w-full rounded-full border border-theme-border py-2 text-xs text-theme-text-secondary hover:text-theme-accent disabled:opacity-50"
+                  >
+                    {loading ? '正在重新发送…' : '没有收到？重新发送确认邮件'}
+                  </button>
+                  {resendMessage && (
+                    <p className="mb-3 text-[11px] leading-relaxed text-theme-text-secondary">{resendMessage}</p>
+                  )}
+                </>
+              )}
               <button
                 onClick={() => { setSuccess(false); setMode('login'); }}
                 className="px-5 py-2 bg-theme-accent text-white rounded-full text-sm font-heading font-semibold cursor-pointer whitespace-nowrap hover:bg-theme-accent-hover transition-colors"
               >
-                去登录
+                {requiresEmailConfirmation ? '我已确认邮箱，去登录' : '继续'}
               </button>
             </div>
           ) : (

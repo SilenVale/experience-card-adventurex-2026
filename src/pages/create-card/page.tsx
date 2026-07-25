@@ -1,60 +1,121 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { gsap } from 'gsap';
 import { useAuth } from '@/hooks/useAuth';
-import { getExperienceCard, saveExperienceCard, updateExperienceCard, type CardStatus } from '@/lib/experienceCards';
+import {
+  getExperienceCard,
+  saveExperienceCard,
+  updateExperienceCard,
+  type CardStatus,
+} from '@/lib/experienceCards';
 import { supabase } from '@/lib/supabase';
 import Navbar from '@/components/feature/Navbar';
-import Footer from '@/components/feature/Footer';
 import LoginModal from '@/components/feature/LoginModal';
-import SharePanel from '@/components/feature/SharePanel';
+import FadeContent from '@/components/effects/FadeContent';
+import CreateCardPreview from './CreateCardPreview';
+import XiaohongshuPublishModal from '@/pages/community/components/XiaohongshuPublishModal';
 
 type CreateStep = 1 | 2 | 3 | 'success';
+type InputMode = 'write' | 'xiaohongshu';
+type Visibility = 'private' | 'trial' | 'public';
 
 const questions = [
-  { id: 1, question: '你当时真正想解决什么问题？', hint: '不是表面问题，而是那个让你觉得"不对劲"的根本原因' },
-  { id: 2, question: '你做过哪些关键动作？', hint: '不需要详细描述每一步，只需要列出那 3-5 个真正起到作用的关键动作' },
-  { id: 3, question: '哪一步没有成功，后来如何调整？', hint: '诚实地写下来，失败的部分往往是最有价值的经验' },
-  { id: 4, question: '最后发生了什么？', hint: '不管是好是坏，如实描述结果。不需要夸大或美化' },
-  { id: 5, question: '在什么情况下，这段经验不适合别人照搬？', hint: '比如：预算不同、团队规模不同、时间限制不同、行业不同等' },
+  { id: 1, question: '你当时真正想解决什么问题？', hint: '不是表面问题，而是那个让你觉得“不对劲”的根本原因。' },
+  { id: 2, question: '你做过哪些关键动作？', hint: '列出 3–5 个真正改变结果的动作，每个动作单独换行。' },
+  { id: 3, question: '哪一步没有成功，后来如何调整？', hint: '失败与调整是 Build in Public 里最有价值的部分。' },
+  { id: 4, question: '最后发生了什么？', hint: '如实写结果，可以是数字、变化或一个没有达到的目标。' },
+  { id: 5, question: '在什么情况下，这段经验不适合别人照搬？', hint: '写清预算、团队、时间、行业或人群差异。' },
 ];
+
+const emptyDraft = {
+  title: '',
+  oneLiner: '',
+  problem: '',
+  actions: '',
+  pitfall: '',
+  result: '',
+  boundary: '',
+  suitableFor: '',
+};
+
+const visibilityOptions: { id: Visibility; title: string; description: string; icon: string }[] = [
+  { id: 'private', title: '私人草稿', description: '只保存在我的名片中，核心内容不公开。', icon: 'ri-lock-line' },
+  { id: 'trial', title: '发布为可试用 V1', description: '公开摘要，邀请处境相近的人提交反馈。', icon: 'ri-flask-line' },
+  { id: 'public', title: '加入公开构建', description: '展示版本变化，并生成小红书构建记录。', icon: 'ri-broadcast-line' },
+];
+
+function CreateFade({
+  children,
+  delay = 0,
+  className = '',
+  blur = true,
+}: {
+  children: ReactNode;
+  delay?: number;
+  className?: string;
+  blur?: boolean;
+}) {
+  return (
+    <FadeContent
+      blur={blur}
+      duration={820}
+      ease="power3.out"
+      delay={delay}
+      threshold={0.04}
+      initialOpacity={0}
+      className={className}
+    >
+      {children}
+    </FadeContent>
+  );
+}
 
 export default function CreateCardPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const draftId = new URLSearchParams(location.search).get('draft');
   const [step, setStep] = useState<CreateStep>(1);
+  const [inputMode, setInputMode] = useState<InputMode>('write');
   const [rawExperience, setRawExperience] = useState('');
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [currentQuestion, setCurrentQuestion] = useState(0);
-  const [draft, setDraft] = useState({
-    title: '',
-    oneLiner: '',
-    problem: '',
-    actions: '',
-    result: '',
-    suitableFor: '',
-    boundary: '',
-  });
+  const [draft, setDraft] = useState(emptyDraft);
   const [sourceMap, setSourceMap] = useState<Record<string, string[]>>({});
   const [sharingConsent, setSharingConsent] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [loginOpen, setLoginOpen] = useState(false);
-  const [loginReason, setLoginReason] = useState('');
+  const [visibility, setVisibility] = useState<Visibility>('trial');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [savedCardId, setSavedCardId] = useState<string | null>(null);
   const [savedStatus, setSavedStatus] = useState<CardStatus | null>(null);
-  const [shareOpen, setShareOpen] = useState(false);
+  const [loginOpen, setLoginOpen] = useState(false);
+  const [loginReason, setLoginReason] = useState('');
+  const [publisherOpen, setPublisherOpen] = useState(false);
+  const [questionTransitioning, setQuestionTransitioning] = useState(false);
   const [editingCardId, setEditingCardId] = useState<string | null>(null);
   const [loadingDraft, setLoadingDraft] = useState(Boolean(draftId));
+  const questionStageRef = useRef<HTMLDivElement>(null);
+  const questionTweenRef = useRef<gsap.core.Tween | null>(null);
+
+  useEffect(() => {
+    if (step === 'success') return;
+    try {
+      localStorage.setItem(
+        'experience-card-create-autosave',
+        JSON.stringify({ rawExperience, answers, draft, visibility, inputMode, updatedAt: new Date().toISOString() })
+      );
+    } catch {
+      // Current-session editing remains available when storage is unavailable.
+    }
+  }, [rawExperience, answers, draft, visibility, inputMode, step]);
 
   useEffect(() => {
     if (!draftId) {
       setLoadingDraft(false);
       return;
     }
-
+    if (authLoading) return;
     if (!user) {
       setLoadingDraft(false);
       setSaveError('登录后才能继续编辑草稿。');
@@ -62,53 +123,49 @@ export default function CreateCardPage() {
     }
 
     let active = true;
-
     const loadDraft = async () => {
       setLoadingDraft(true);
       setSaveError(null);
-
       try {
         const card = await getExperienceCard(draftId);
         if (!card || card.user_id !== user.id || card.status !== 'draft') {
           throw new Error('这张草稿不存在，或你没有编辑权限。');
         }
-
         if (!active) return;
         setEditingCardId(card.id);
         setRawExperience(card.background);
-        setAnswers({
-          1: card.problem,
-          2: card.actions_done,
-          3: card.pitfall,
-          4: card.result,
-          5: card.boundary,
-        });
+        setAnswers({ 1: card.problem, 2: card.actions_done, 3: card.pitfall, 4: card.result, 5: card.boundary });
         setDraft({
           title: card.title,
           oneLiner: card.one_liner,
           problem: card.problem,
           actions: card.actions_done,
+          pitfall: card.pitfall,
           result: card.result,
           suitableFor: card.suitable_for,
           boundary: card.boundary,
         });
         setSourceMap(card.source_map ?? {});
         setSharingConsent(Boolean(card.sharing_consent));
+        setVisibility('private');
         setStep(3);
       } catch (error) {
-        if (active) {
-          setSaveError(error instanceof Error ? error.message : '读取草稿失败，请稍后重试。');
-        }
+        if (active) setSaveError(error instanceof Error ? error.message : '读取草稿失败，请稍后重试。');
       } finally {
         if (active) setLoadingDraft(false);
       }
     };
-
-    loadDraft();
+    void loadDraft();
     return () => {
       active = false;
     };
-  }, [draftId, user]);
+  }, [draftId, user, authLoading]);
+
+  useEffect(() => {
+    return () => {
+      questionTweenRef.current?.kill();
+    };
+  }, []);
 
   const handleStep1Next = () => {
     if (!rawExperience.trim()) return;
@@ -116,76 +173,117 @@ export default function CreateCardPage() {
     setCurrentQuestion(0);
   };
 
-  const handleAnswerChange = (qId: number, value: string) => {
-    setAnswers((prev) => ({ ...prev, [qId]: value }));
-  };
+  const transitionFromQuestion = (onComplete: () => void) => {
+    if (questionTransitioning) return;
 
-  const handleQuestionNext = () => {
-    if (currentQuestion < questions.length - 1) {
-      setCurrentQuestion((prev) => prev + 1);
-    } else {
-      handleGenerateDraft();
-    }
-  };
-
-  const handleGenerateDraft = async () => {
-    if (!sharingConsent) {
-      setSaveError('请先确认：你有权分享这段经历，并同意由 AI 仅基于你提供的内容生成候选卡。');
+    const element = questionStageRef.current;
+    if (!element || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      onComplete();
       return;
     }
 
+    setQuestionTransitioning(true);
+    questionTweenRef.current?.kill();
+    questionTweenRef.current = gsap.to(element, {
+      autoAlpha: 0,
+      y: -12,
+      scale: 0.995,
+      filter: 'blur(6px)',
+      duration: 0.32,
+      ease: 'power2.in',
+      onComplete: () => {
+        onComplete();
+        setQuestionTransitioning(false);
+      },
+    });
+  };
+
+  const completeQuestions = async () => {
+    if (!sharingConsent) {
+      setSaveError('请先确认你有权分享这段经历，并会在发布前逐项确认。');
+      return;
+    }
+    if (!user) {
+      setLoginReason('调用 AI 生成经验卡需要先登录；你刚才填写的内容已经保存在当前浏览器。');
+      setLoginOpen(true);
+      return;
+    }
     setGenerating(true);
     setSaveError(null);
     const { data, error } = await supabase.functions.invoke('dify-generate-card', {
       body: { raw_experience: rawExperience, answers, sharing_consent: true },
     });
     setGenerating(false);
-
     if (error || !data?.card) {
       setSaveError('AI 暂时无法生成候选卡。请稍后重试；不会用规则模板伪装成 AI 结果。');
       return;
     }
-
     const card = data.card as Record<string, unknown>;
     setDraft({
-      title: String(card.title),
-      oneLiner: String(card.one_liner),
-      problem: String(card.problem),
-      actions: String(card.actions),
-      result: String(card.result),
-      suitableFor: String(card.suitable_for),
-      boundary: String(card.boundary),
+      title: String(card.title ?? ''),
+      oneLiner: String(card.one_liner ?? ''),
+      problem: String(card.problem ?? ''),
+      actions: String(card.actions ?? ''),
+      pitfall: String(card.pitfall ?? ''),
+      result: String(card.result ?? ''),
+      suitableFor: String(card.suitable_for ?? ''),
+      boundary: String(card.boundary ?? ''),
     });
     setSourceMap((card.source_map as Record<string, string[]>) ?? {});
     setStep(3);
   };
 
-  const handleSave = async (status: CardStatus) => {
+  const handleQuestionNext = () => {
+    transitionFromQuestion(() => {
+      if (currentQuestion < questions.length - 1) {
+        setCurrentQuestion((current) => current + 1);
+        return;
+      }
+      void completeQuestions();
+    });
+  };
+
+  const handleQuestionPrevious = () => {
+    transitionFromQuestion(() => {
+      if (currentQuestion === 0) {
+        setStep(1);
+        return;
+      }
+      setCurrentQuestion((current) => current - 1);
+    });
+  };
+
+  const handlePublish = async () => {
+    if (!draft.title.trim() || !draft.actions.trim() || !draft.suitableFor.trim()) {
+      setSaveError('请至少补充标题、关键动作和适合对象。');
+      return;
+    }
+
     if (!user) {
-      setLoginReason(status === 'published' ? '发布经验卡需要登录' : '保存草稿需要登录');
+      setLoginReason(visibility === 'private' ? '保存草稿需要登录' : '发布经验卡需要登录');
       setLoginOpen(true);
       return;
     }
 
     setSaving(true);
     setSaveError(null);
-
+    const status: CardStatus = visibility === 'private' ? 'draft' : 'published';
+    const input = {
+      userId: user.id,
+      title: draft.title.trim(),
+      oneLiner: draft.oneLiner.trim() || draft.result.trim() || draft.problem.trim(),
+      problem: draft.problem.trim(),
+      background: rawExperience.trim(),
+      actionsDone: draft.actions.trim(),
+      pitfall: draft.pitfall.trim() || answers[3]?.trim() || '',
+      result: draft.result.trim(),
+      suitableFor: draft.suitableFor.trim(),
+      boundary: draft.boundary.trim(),
+      sourceMap,
+      sharingConsent,
+      status,
+    };
     try {
-      const input = {
-        userId: user.id,
-        title: draft.title.trim(),
-        oneLiner: draft.result.trim() || draft.oneLiner.trim() || draft.problem.trim(),
-        problem: draft.problem.trim(),
-        background: rawExperience.trim(),
-        actionsDone: draft.actions.trim(),
-        pitfall: answers[3]?.trim() || '',
-        result: draft.result.trim(),
-        suitableFor: draft.suitableFor.trim(),
-        boundary: draft.boundary.trim(),
-        sourceMap,
-        sharingConsent,
-        status,
-      };
       const data = editingCardId
         ? await updateExperienceCard(editingCardId, input)
         : await saveExperienceCard(input);
@@ -193,334 +291,471 @@ export default function CreateCardPage() {
       setSavedStatus(data.status);
       setStep('success');
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : '保存失败，请稍后重试');
+      setSaveError(error instanceof Error ? error.message : '保存失败，请稍后重试。');
     } finally {
       setSaving(false);
     }
   };
 
-  const themeBg = 'bg-theme-bg';
-  const themeCard = 'bg-theme-bg-card';
-  const themeInput = 'bg-theme-bg-card-alt';
-  const themeBorder = 'border-theme-border-accent';
-  const themeText = 'text-theme-text';
-  const themeTextSec = 'text-theme-text-secondary';
-  const themeTextMuted = 'text-theme-text-muted';
-  const themeAccent = 'bg-theme-accent';
+  const stageLabel =
+    step === 1 ? '原始经历' : step === 2 ? `AI 追问 ${currentQuestion + 1}/5` : step === 3 ? '编辑确认' : '已保存';
+
+  const previewProps = {
+    title: draft.title,
+    oneLiner: draft.oneLiner,
+    problem: draft.problem || answers[1] || rawExperience,
+    actions: draft.actions || answers[2] || '',
+    pitfall: draft.pitfall || answers[3] || '',
+    result: draft.result || answers[4] || '',
+    boundary: draft.boundary || answers[5] || '',
+    stageLabel,
+  };
 
   return (
-    <div className={`min-h-screen ${themeBg} transition-colors duration-300`}>
+    <div className="experience-motion min-h-screen bg-theme-bg transition-colors duration-300">
       <Navbar />
-
       <main className="pt-16 pb-20">
-        <div className="max-w-2xl mx-auto px-4 md:px-8 py-8 md:py-12">
-          {/* Progress Bar */}
-          {typeof step === 'number' && (
-            <div className="flex items-center gap-2 mb-8">
-              {[1, 2, 3].map((s) => (
-                <div key={s} className="flex items-center gap-2 flex-1">
-                  <div
-                    className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-heading font-semibold transition-all ${
-                      step > s
-                        ? `${themeAccent} text-white`
-                        : step === s
-                          ? `${themeAccent} text-white`
-                          : `${themeCard} border ${themeBorder} ${themeTextSec}`
-                    }`}
-                  >
-                    {step > s ? <i className="ri-check-line" /> : s}
-                  </div>
-                  {s < 3 && (
-                    <div className={`flex-1 h-px ${step > s ? 'bg-theme-accent/40' : 'bg-theme-border'}`} />
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-
+        <div className="mx-auto max-w-6xl px-4 py-7 md:px-8 md:py-10">
           {loadingDraft && (
-            <div className="flex flex-col items-center py-20 gap-3">
-              <i className="ri-loader-4-line text-2xl text-theme-accent/60 animate-spin" />
-              <p className={`text-sm ${themeTextSec}`}>正在打开你的草稿…</p>
+            <div className="mb-5 rounded-xl border border-theme-border bg-theme-bg-card px-4 py-3 text-xs text-theme-text-muted">
+              正在打开你的草稿…
             </div>
           )}
+          {typeof step === 'number' && (
+            <>
+              <CreateFade className="mb-5" blur={false}>
+                <div className="flex items-center gap-3">
+                  <span className="chapter-label">创建经验卡</span>
+                  <div className="h-px flex-1 bg-theme-border" />
+                  <span className="hidden text-[10px] text-theme-text-muted sm:block">已在当前浏览器自动保存</span>
+                </div>
+              </CreateFade>
+              <div className="mb-6 grid grid-cols-3 gap-2">
+                {[
+                  { no: 1, title: '倒出经历', note: '先写真实发生的事' },
+                  { no: 2, title: 'AI 追问', note: '补齐判断与边界' },
+                  { no: 3, title: '编辑发布', note: '确认公开范围' },
+                ].map((item) => {
+                  const active = step === item.no;
+                  const complete = step > item.no;
+                  return (
+                    <CreateFade key={item.no} delay={item.no * 55}>
+                      <div
+                        className={`ui-motion rounded-2xl border px-3 py-3 md:px-4 ${
+                          active
+                            ? 'border-theme-accent/25 bg-theme-accent-subtle'
+                            : 'border-theme-border bg-theme-bg-card'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`flex h-7 w-8 items-center justify-center rounded-xl text-[10px] font-bold ${
+                              active || complete ? 'bg-theme-accent text-white' : 'bg-theme-bg-card-alt text-theme-text-muted'
+                            }`}
+                          >
+                            {complete ? <i className="ri-check-line" /> : `0${item.no}`}
+                          </span>
+                          <span className={`text-xs font-semibold ${active ? 'text-theme-accent' : 'text-theme-text'}`}>
+                            {item.title}
+                          </span>
+                        </div>
+                        <p className="mt-2 hidden text-[10px] text-theme-text-muted sm:block">{item.note}</p>
+                      </div>
+                    </CreateFade>
+                  );
+                })}
+              </div>
+            </>
+          )}
 
-          {/* Step 1: Raw Experience */}
-          {!loadingDraft && step === 1 && (
-            <div>
-              <h1 className={`font-heading font-black ${themeText} text-2xl md:text-3xl leading-tight mb-3`}>
-                把你做成过的一件事，留给未来可能需要它的人。
-              </h1>
-              <p className={`text-sm ${themeTextSec} mb-8`}>
-                不需要完美，也不用展示全部。你决定分享什么，AI 只帮你说清楚。
-              </p>
+          {step !== 'success' ? (
+            <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
+              <section className="ui-motion relative overflow-hidden rounded-[26px] border border-theme-border bg-theme-bg-card p-3 shadow-[0_24px_70px_rgba(89,52,43,0.07)] md:p-4">
+                <div className="relative overflow-hidden rounded-[20px] border border-theme-border bg-[#FFFCF8] px-6 py-7 shadow-sm md:px-10 md:py-9">
+                  <div className="absolute bottom-8 left-3 top-8 flex flex-col justify-between">
+                    {[0, 1, 2, 3, 4].map((hole) => (
+                      <span key={hole} className="h-2 w-2 rounded-full bg-[#D9CDC1]/80" />
+                    ))}
+                  </div>
 
-              <div className="mb-6">
-                <label className="block text-xs font-heading font-semibold text-theme-accent/70 uppercase tracking-wider mb-3">
-                  写下你的原始经历
-                </label>
-                <textarea
-                  className={`w-full ${themeInput} border ${themeBorder} rounded-xl px-4 py-4 text-sm ${themeText} placeholder:${themeTextMuted} focus:outline-none focus:border-theme-accent transition-colors resize-none h-48`}
-                  placeholder="可以很乱。写下当时发生了什么、你做了什么、结果怎样就够了。..."
-                  value={rawExperience}
-                  onChange={(e) => setRawExperience(e.target.value)}
-                />
-                <p className={`text-[10px] ${themeTextMuted} mt-2`}>
-                  示例："我第一次负责社团招新，前两天几乎没人报名。后来我改了招募内容和活动形式，最后来了 42 个人……"
+                  <div className="pl-2">
+                    {step === 1 && (
+                      <div key="create-step-1">
+                        <CreateFade delay={190} blur={false}>
+                          <span className="block text-[10px] font-semibold tracking-[0.13em] text-theme-accent">
+                            01 · 原始经历
+                          </span>
+                        </CreateFade>
+                        <CreateFade delay={230}>
+                          <h1 className="mt-3 max-w-2xl font-heading text-2xl font-black leading-[1.05] tracking-[-0.045em] text-[#1A1514] md:text-4xl">
+                            把你做成过的一件事，
+                            <br />
+                            留给未来可能需要它的人。
+                          </h1>
+                        </CreateFade>
+                        <CreateFade delay={270} blur={false}>
+                          <p className="mt-3 text-sm leading-relaxed text-[#6B5B55]">
+                            不需要完美，也不用展示全部。你决定分享什么，AI 只帮你说清楚。
+                          </p>
+                        </CreateFade>
+
+                        <div className="mt-6 grid grid-cols-2 gap-2">
+                          <CreateFade delay={310}>
+                            <button
+                              onClick={() => setInputMode('write')}
+                              className={`ui-motion w-full cursor-pointer rounded-xl border px-3 py-3 text-left ${
+                                inputMode === 'write'
+                                  ? 'border-theme-accent/25 bg-theme-accent-subtle'
+                                  : 'border-theme-border bg-theme-bg-card'
+                              }`}
+                            >
+                              <i className="ri-pencil-line text-theme-accent" />
+                              <span className="ml-2 text-xs font-semibold text-theme-text">自由写一段</span>
+                              <p className="mt-1 text-[9px] text-theme-text-muted">可以很乱，先把发生过的事写下来</p>
+                            </button>
+                          </CreateFade>
+                          <CreateFade delay={350}>
+                            <button
+                              onClick={() => setInputMode('xiaohongshu')}
+                              className={`ui-motion w-full cursor-pointer rounded-xl border px-3 py-3 text-left ${
+                                inputMode === 'xiaohongshu'
+                                  ? 'border-theme-accent/25 bg-theme-accent-subtle'
+                                  : 'border-theme-border bg-theme-bg-card'
+                              }`}
+                            >
+                              <i className="ri-red-packet-line text-theme-accent" />
+                              <span className="ml-2 text-xs font-semibold text-theme-text">整理构建记录</span>
+                              <p className="mt-1 text-[9px] text-theme-text-muted">粘贴已有的小红书笔记或项目日志</p>
+                            </button>
+                          </CreateFade>
+                        </div>
+
+                        <CreateFade delay={390} blur={false}>
+                          <label className="mt-6 block text-[10px] font-semibold tracking-wider text-theme-accent">
+                            {inputMode === 'write' ? '写下你的原始经历' : '粘贴你的公开构建内容'}
+                          </label>
+                        </CreateFade>
+                        <CreateFade delay={430}>
+                          <textarea
+                            className="mt-2 h-60 w-full resize-none rounded-2xl border border-theme-border bg-theme-bg-card-alt px-4 py-4 text-sm leading-relaxed text-theme-text outline-none transition-colors placeholder:text-theme-text-muted focus:border-theme-accent/35"
+                            placeholder={
+                              inputMode === 'write'
+                                ? '当时发生了什么？你做过什么？结果怎样？先完整写下来，不用急着总结。'
+                                : '粘贴小红书笔记正文、项目日志或评论反馈。核心实现细节可以先删除。'
+                            }
+                            value={rawExperience}
+                            onChange={(event) => setRawExperience(event.target.value)}
+                          />
+                        </CreateFade>
+                        <CreateFade delay={470} blur={false}>
+                          <div className="mt-3 flex items-start gap-2 rounded-xl bg-theme-accent-subtle px-3 py-2.5">
+                            <i className="ri-shield-keyhole-line mt-0.5 text-xs text-theme-accent" />
+                            <p className="text-[10px] leading-relaxed text-theme-text-secondary">
+                              当前内容先作为私人草稿保存。完成整理后，你可以分别选择公开摘要、共创者可见或继续保密。
+                            </p>
+                          </div>
+                        </CreateFade>
+                        <CreateFade delay={490} blur={false}>
+                          <label className="mt-3 flex cursor-pointer items-start gap-2 rounded-xl border border-theme-border bg-theme-bg-card px-3 py-2.5 text-[10px] leading-relaxed text-theme-text-secondary">
+                            <input
+                              type="checkbox"
+                              checked={sharingConsent}
+                              onChange={(event) => setSharingConsent(event.target.checked)}
+                              className="mt-0.5 h-4 w-4 accent-red-500"
+                            />
+                            <span>我确认有权分享这段经历，并会在发布前逐项确认 AI 生成内容。</span>
+                          </label>
+                        </CreateFade>
+                        <CreateFade delay={510} blur={false}>
+                          <button
+                            onClick={handleStep1Next}
+                            disabled={!rawExperience.trim() || !sharingConsent}
+                            className="mt-5 w-full cursor-pointer rounded-full bg-theme-accent py-3 text-sm font-semibold text-white transition-colors hover:bg-theme-accent-hover disabled:cursor-not-allowed disabled:opacity-35"
+                          >
+                            继续，让 AI 帮我追问
+                          </button>
+                        </CreateFade>
+                      </div>
+                    )}
+
+                    {step === 2 && (
+                      <div ref={questionStageRef} key={`create-question-${currentQuestion}`}>
+                        <CreateFade delay={40} blur={false}>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-semibold tracking-[0.13em] text-theme-accent">
+                              02 · AI 追问
+                            </span>
+                            <span className="text-[10px] text-theme-text-muted">{currentQuestion + 1} / {questions.length}</span>
+                          </div>
+                        </CreateFade>
+                        <CreateFade delay={80} blur={false}>
+                          <div className="mt-4 flex gap-1.5">
+                            {questions.map((_, index) => (
+                              <span
+                                key={index}
+                                className={`h-1 flex-1 rounded-full ${
+                                  index <= currentQuestion ? 'bg-theme-accent' : 'bg-theme-accent-subtle'
+                                }`}
+                              />
+                            ))}
+                          </div>
+                        </CreateFade>
+
+                        <CreateFade delay={120}>
+                          <div className="mt-7 rounded-[18px] border border-theme-accent/10 bg-theme-accent-subtle px-5 py-5">
+                            <div className="flex items-center gap-2 text-[10px] font-semibold text-theme-accent">
+                              <i className="ri-sparkling-2-line" />
+                              这不是审问，只是在帮经验变得可判断
+                            </div>
+                            <h2 className="mt-3 font-heading text-xl font-bold leading-tight text-theme-text md:text-2xl">
+                              {questions[currentQuestion].question}
+                            </h2>
+                            <p className="mt-2 text-xs leading-relaxed text-theme-text-secondary">
+                              {questions[currentQuestion].hint}
+                            </p>
+                          </div>
+                        </CreateFade>
+
+                        <CreateFade delay={160}>
+                          <textarea
+                            autoFocus
+                            disabled={questionTransitioning}
+                            className="mt-4 h-48 w-full resize-none rounded-2xl border border-theme-border bg-theme-bg-card-alt px-4 py-4 text-sm leading-relaxed text-theme-text outline-none transition-colors placeholder:text-theme-text-muted focus:border-theme-accent/35"
+                            placeholder="写下真实答案，不需要把它写得像一篇文章。"
+                            value={answers[questions[currentQuestion].id] || ''}
+                            onChange={(event) =>
+                              setAnswers((current) => ({
+                                ...current,
+                                [questions[currentQuestion].id]: event.target.value,
+                              }))
+                            }
+                          />
+                        </CreateFade>
+
+                        <CreateFade delay={200} blur={false}>
+                          <div className="mt-5 flex gap-2">
+                            <button
+                              onClick={handleQuestionPrevious}
+                              disabled={questionTransitioning}
+                              className="flex-1 cursor-pointer rounded-full border border-theme-text/15 py-3 text-sm text-theme-text transition-colors hover:bg-theme-bg-card-alt disabled:cursor-not-allowed disabled:opacity-45"
+                            >
+                              上一步
+                            </button>
+                            <button
+                              onClick={handleQuestionNext}
+                              disabled={questionTransitioning || !answers[questions[currentQuestion].id]?.trim()}
+                              className="flex-1 cursor-pointer rounded-full bg-theme-accent py-3 text-sm font-semibold text-white transition-colors hover:bg-theme-accent-hover disabled:cursor-not-allowed disabled:opacity-35"
+                            >
+                              {generating
+                                ? 'AI 正在整理…'
+                                : questionTransitioning
+                                ? '正在整理…'
+                                : currentQuestion === questions.length - 1
+                                  ? '生成经验卡草稿'
+                                  : '下一问'}
+                            </button>
+                          </div>
+                        </CreateFade>
+                      </div>
+                    )}
+
+                    {step === 3 && (
+                      <div key="create-step-3">
+                        <CreateFade delay={40} blur={false}>
+                          <span className="block text-[10px] font-semibold tracking-[0.13em] text-theme-accent">
+                            03 · 编辑并确认
+                          </span>
+                        </CreateFade>
+                        <CreateFade delay={80}>
+                          <h1 className="mt-2 font-heading text-2xl font-black tracking-[-0.04em] text-[#1A1514]">
+                            这张经验卡由你确认，不由 AI 决定。
+                          </h1>
+                        </CreateFade>
+                        <CreateFade delay={120} blur={false}>
+                          <p className="mt-2 text-xs leading-relaxed text-[#6B5B55]">
+                            修改、删除或隐藏任何内容。只有你确认后，它才会成为可试用的 V1。
+                          </p>
+                        </CreateFade>
+
+                        <div className="mt-6 space-y-4">
+                          {[
+                            { key: 'title', label: '经验卡标题', rows: 1 },
+                            { key: 'oneLiner', label: '一句话摘要 / 适用情境', rows: 2 },
+                            { key: 'problem', label: '01 · 当时真正的问题', rows: 3 },
+                            { key: 'actions', label: '02 · 关键动作（每个动作单独换行）', rows: 5 },
+                            { key: 'pitfall', label: '03 · 踩坑与调整', rows: 3 },
+                            { key: 'result', label: '04 · 最终发生了什么', rows: 3 },
+                            { key: 'suitableFor', label: '05 · 这段经验适合谁', rows: 3 },
+                            { key: 'boundary', label: '使用边界 / 不适合照搬的情况', rows: 3 },
+                          ].map((field, index) => (
+                            <CreateFade key={field.key} delay={160 + index * 36}>
+                              <label className="block">
+                                <span className="text-[10px] font-semibold text-theme-accent">{field.label}</span>
+                                {field.rows === 1 ? (
+                                  <input
+                                    value={draft[field.key as keyof typeof draft]}
+                                    onChange={(event) => setDraft((current) => ({ ...current, [field.key]: event.target.value }))}
+                                    className="mt-1.5 w-full rounded-xl border border-theme-border bg-theme-bg-card-alt px-3.5 py-3 text-sm text-theme-text outline-none focus:border-theme-accent/35"
+                                  />
+                                ) : (
+                                  <textarea
+                                    rows={field.rows}
+                                    value={draft[field.key as keyof typeof draft]}
+                                    onChange={(event) => setDraft((current) => ({ ...current, [field.key]: event.target.value }))}
+                                    className="mt-1.5 w-full resize-none rounded-xl border border-theme-border bg-theme-bg-card-alt px-3.5 py-3 text-sm leading-relaxed text-theme-text outline-none focus:border-theme-accent/35"
+                                  />
+                                )}
+                              </label>
+                            </CreateFade>
+                          ))}
+                        </div>
+
+                        <CreateFade delay={390}>
+                          <div className="mt-6 border-t border-dashed border-theme-border pt-5">
+                            <p className="text-[10px] font-semibold text-theme-accent">选择公开方式</p>
+                            <div className="mt-2 grid gap-2">
+                              {visibilityOptions.map((option) => (
+                                <button
+                                  key={option.id}
+                                  onClick={() => setVisibility(option.id)}
+                                  className={`ui-motion flex cursor-pointer items-start gap-3 rounded-xl border px-3.5 py-3 text-left ${
+                                    visibility === option.id
+                                      ? 'border-theme-accent/25 bg-theme-accent-subtle'
+                                      : 'border-theme-border bg-theme-bg-card'
+                                  }`}
+                                >
+                                  <span className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full ${
+                                    visibility === option.id ? 'bg-theme-accent text-white' : 'bg-theme-bg-card-alt text-theme-text-muted'
+                                  }`}>
+                                    <i className={option.icon} />
+                                  </span>
+                                  <span>
+                                    <strong className="block text-xs text-theme-text">{option.title}</strong>
+                                    <span className="mt-1 block text-[10px] leading-relaxed text-theme-text-muted">{option.description}</span>
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </CreateFade>
+
+                        {saveError && (
+                          <CreateFade delay={420} blur={false}>
+                            <div className="mt-4 rounded-xl border border-theme-accent/15 bg-theme-accent-subtle px-4 py-3 text-xs text-theme-accent">
+                              {saveError}
+                            </div>
+                          </CreateFade>
+                        )}
+
+                        <CreateFade delay={440} blur={false}>
+                          <div className="mt-5 grid grid-cols-[minmax(0,0.78fr)_minmax(148px,1.22fr)] gap-2">
+                            <button
+                              onClick={() => {
+                                setStep(2);
+                                setCurrentQuestion(questions.length - 1);
+                              }}
+                              className="min-h-12 min-w-0 cursor-pointer whitespace-nowrap rounded-full border border-theme-text/15 px-3 py-3 text-xs text-theme-text hover:bg-theme-bg-card-alt sm:text-sm"
+                            >
+                              返回修改
+                            </button>
+                            <button
+                              onClick={handlePublish}
+                              disabled={saving || !draft.title.trim() || !draft.actions.trim() || !draft.suitableFor.trim()}
+                              className="min-h-12 min-w-0 cursor-pointer whitespace-nowrap rounded-full bg-theme-accent px-4 py-3 text-xs font-semibold text-white hover:bg-theme-accent-hover disabled:cursor-not-allowed disabled:opacity-40 sm:px-5 sm:text-sm"
+                            >
+                              {saving
+                                ? '保存中…'
+                                : visibility === 'private'
+                                  ? '保存私人草稿'
+                                  : visibility === 'trial'
+                                    ? '发布可试用 V1'
+                                    : '加入公开构建'}
+                            </button>
+                          </div>
+                        </CreateFade>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </section>
+
+              <CreateFade className="hidden lg:block" delay={220}>
+                <CreateCardPreview {...previewProps} />
+              </CreateFade>
+
+              <CreateFade className="lg:hidden" delay={220}>
+                <details className="ui-motion rounded-2xl border border-theme-border bg-theme-bg-card">
+                  <summary className="flex cursor-pointer list-none items-center px-4 py-3 text-xs font-semibold text-theme-text">
+                    <i className="ri-eye-line mr-2 text-theme-accent" />
+                    查看经验卡实时预览
+                    <i className="ri-arrow-down-s-line ml-auto" />
+                  </summary>
+                  <div className="border-t border-theme-border p-3">
+                    <CreateCardPreview {...previewProps} />
+                  </div>
+                </details>
+              </CreateFade>
+            </div>
+          ) : (
+            <CreateFade className="mx-auto max-w-3xl" delay={80}>
+              <section className="ui-motion rounded-[26px] border border-theme-border bg-theme-bg-card p-3 shadow-[0_24px_80px_rgba(89,52,43,0.08)]">
+                <div className="relative overflow-hidden rounded-[20px] border border-theme-border bg-[#FFFCF8] px-7 py-10 text-center md:px-12">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-theme-accent/15 bg-theme-accent-subtle text-theme-accent">
+                  <i className="ri-check-line text-2xl" />
+                </div>
+                <span className="mt-5 block text-[10px] font-semibold tracking-[0.14em] text-theme-accent">
+                  EXPERIENCE CARD / V1
+                </span>
+                <h1 className="mt-2 font-heading text-2xl font-black tracking-[-0.04em] text-[#1A1514] md:text-4xl">
+                  你的经验卡已经被好好保存。
+                </h1>
+                <p className="mx-auto mt-3 max-w-lg text-sm leading-relaxed text-[#6B5B55]">
+                  {savedStatus === 'published'
+                    ? '已经同步到云端，并出现在经验广场。'
+                    : '已保存为仅作者可见的云端草稿。'}
                 </p>
-              </div>
+                {savedCardId && (
+                  <p className="mt-2 font-mono text-[10px] text-theme-text-muted">ID: {savedCardId}</p>
+                )}
 
-              <label className={`mb-5 flex cursor-pointer items-start gap-3 rounded-xl border ${themeBorder} ${themeCard} px-4 py-3 text-xs ${themeTextSec}`}>
-                <input
-                  type="checkbox"
-                  checked={sharingConsent}
-                  onChange={(event) => setSharingConsent(event.target.checked)}
-                  className="mt-0.5 h-4 w-4 accent-red-500"
-                />
-                <span>我确认我有权分享这段经历；我理解 AI 只能基于我的原话整理候选卡，我会在发布前逐项确认。</span>
-              </label>
-
-              <button
-                onClick={handleStep1Next}
-                disabled={!rawExperience.trim() || !sharingConsent}
-                className={`w-full py-3 rounded-full text-sm font-heading font-semibold cursor-pointer whitespace-nowrap transition-all duration-200 ${
-                  rawExperience.trim()
-                    ? `${themeAccent} text-white hover:bg-theme-accent-hover`
-                    : 'bg-theme-accent-subtle text-theme-text-muted cursor-not-allowed'
-                }`}
-              >
-                继续整理
-              </button>
-            </div>
-          )}
-
-          {/* Step 2: Five Questions */}
-          {!loadingDraft && step === 2 && (
-            <div>
-              <h2 className={`font-heading font-bold ${themeText} text-xl mb-1`}>
-                完善经历细节
-              </h2>
-              <p className={`text-sm ${themeTextSec} mb-6`}>
-                问题 {currentQuestion + 1} / {questions.length}
-              </p>
-
-              <div className="mb-6">
-                <div className="flex gap-1 mb-4">
-                  {questions.map((_, i) => (
-                    <div
-                      key={i}
-                      className={`flex-1 h-0.5 rounded-full transition-colors ${
-                        i < currentQuestion
-                          ? 'bg-theme-accent/50'
-                          : i === currentQuestion
-                            ? 'bg-theme-accent'
-                            : 'bg-theme-accent-subtle'
-                      }`}
-                    />
-                  ))}
-                </div>
-
-                <div className={`${themeCard} border ${themeBorder} rounded-xl p-5 mb-4`}>
-                  <span className="text-[10px] text-theme-accent/60 mb-2 block">关键追问</span>
-                  <h3 className={`text-sm font-heading font-semibold ${themeText} mb-1`}>
-                    {questions[currentQuestion].question}
-                  </h3>
-                  <p className={`text-xs ${themeTextMuted}`}>
-                    {questions[currentQuestion].hint}
-                  </p>
-                </div>
-
-                <textarea
-                  className={`w-full ${themeInput} border ${themeBorder} rounded-xl px-4 py-3.5 text-sm ${themeText} placeholder:${themeTextMuted} focus:outline-none focus:border-theme-accent transition-colors resize-none h-36`}
-                  placeholder="写下你的想法..."
-                  value={answers[questions[currentQuestion].id] || ''}
-                  onChange={(e) => handleAnswerChange(questions[currentQuestion].id, e.target.value)}
-                />
-              </div>
-
-              <div className={`flex items-center gap-2 mb-4 text-[10px] ${themeTextMuted}`}>
-                <i className="ri-robot-line text-xs text-theme-gold/50" />
-                完成后，AI 将只基于这些内容生成候选卡
-              </div>
-
-              <div className="flex gap-3">
-                {currentQuestion > 0 && (
+                <div className="mx-auto mt-7 grid max-w-xl gap-2 sm:grid-cols-2">
                   <button
-                    onClick={() => setCurrentQuestion((prev) => prev - 1)}
-                    className={`flex-1 py-2.5 border ${themeBorder} ${themeTextSec} hover:${themeText} rounded-full text-sm cursor-pointer whitespace-nowrap transition-colors`}
+                    onClick={() => savedCardId && navigate(`/card/${savedCardId}`)}
+                    className="cursor-pointer rounded-full border border-theme-text/15 py-3 text-sm font-semibold text-theme-text hover:bg-theme-bg-card-alt"
                   >
-                    上一题
+                    查看完整经验卡
                   </button>
-                )}
-                <button
-                  onClick={handleQuestionNext}
-                  disabled={!answers[questions[currentQuestion].id]?.trim()}
-                  className={`flex-1 py-2.5 rounded-full text-sm font-heading font-semibold cursor-pointer whitespace-nowrap transition-all duration-200 ${
-                    answers[questions[currentQuestion].id]?.trim()
-                      ? `${themeAccent} text-white hover:bg-theme-accent-hover`
-                      : 'bg-theme-accent-subtle text-theme-text-muted cursor-not-allowed'
-                  }`}
-                >
-                  {currentQuestion === questions.length - 1 ? (generating ? 'AI 正在整理…' : '生成经验名片草稿') : '下一题'}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Step 3: Edit & Confirm */}
-          {!loadingDraft && step === 3 && (
-            <div>
-              <h2 className={`font-heading font-bold ${themeText} text-xl mb-1`}>
-                {editingCardId ? '继续编辑你的草稿' : '编辑并确认你的经验名片'}
-              </h2>
-              <p className={`text-sm ${themeTextSec} mb-6`}>
-                {editingCardId
-                  ? '已为你恢复上次保存的内容。修改后可继续保存，或直接发布。'
-                  : '这是 AI 帮你整理的草稿。你可以修改任何内容，删除不想展示的部分。'}
-              </p>
-
-              <div className={`${themeCard} border border-theme-gold-subtle rounded-xl p-5 mb-6 space-y-4`}>
-                <div>
-                  <label className="block text-[10px] text-theme-accent/60 uppercase mb-1">标题</label>
-                  <input
-                    className={`w-full ${themeInput} border ${themeBorder} rounded-lg px-3.5 py-2.5 text-sm ${themeText} placeholder:${themeTextMuted} focus:outline-none focus:border-theme-accent transition-colors`}
-                    value={draft.title}
-                    onChange={(e) => setDraft({ ...draft, title: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] text-theme-accent/60 uppercase mb-1">当时面对的问题</label>
-                  <textarea
-                    className={`w-full ${themeInput} border ${themeBorder} rounded-lg px-3.5 py-2.5 text-sm ${themeText} placeholder:${themeTextMuted} focus:outline-none focus:border-theme-accent transition-colors resize-none h-20`}
-                    value={draft.problem}
-                    onChange={(e) => setDraft({ ...draft, problem: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] text-theme-accent/60 uppercase mb-1">关键动作</label>
-                  <textarea
-                    className={`w-full ${themeInput} border ${themeBorder} rounded-lg px-3.5 py-2.5 text-sm ${themeText} placeholder:${themeTextMuted} focus:outline-none focus:border-theme-accent transition-colors resize-none h-20`}
-                    value={draft.actions}
-                    onChange={(e) => setDraft({ ...draft, actions: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] text-theme-accent/60 uppercase mb-1">最终结果</label>
-                  <textarea
-                    className={`w-full ${themeInput} border ${themeBorder} rounded-lg px-3.5 py-2.5 text-sm ${themeText} placeholder:${themeTextMuted} focus:outline-none focus:border-theme-accent transition-colors resize-none h-20`}
-                    value={draft.result}
-                    onChange={(e) => setDraft({ ...draft, result: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] text-theme-accent/60 uppercase mb-1">这段经验适合谁</label>
-                  <textarea
-                    className={`w-full ${themeInput} border ${themeBorder} rounded-lg px-3.5 py-2.5 text-sm ${themeText} placeholder:${themeTextMuted} focus:outline-none focus:border-theme-accent transition-colors resize-none h-20`}
-                    placeholder="例如：第一次组织校园活动、资源有限的学生社团负责人"
-                    value={draft.suitableFor}
-                    onChange={(e) => setDraft({ ...draft, suitableFor: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] text-theme-accent/60 uppercase mb-1">使用边界</label>
-                  <textarea
-                    className={`w-full ${themeInput} border ${themeBorder} rounded-lg px-3.5 py-2.5 text-sm ${themeText} placeholder:${themeTextMuted} focus:outline-none focus:border-theme-accent transition-colors resize-none h-20`}
-                    value={draft.boundary}
-                    onChange={(e) => setDraft({ ...draft, boundary: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              {Object.keys(sourceMap).length > 0 && (
-                <p className={`mb-5 text-[11px] leading-relaxed ${themeTextMuted}`}>
-                  来源：AI 仅引用了你的原始经历与五个回答进行整理。发布前请逐项确认是否准确。
-                </p>
-              )}
-
-              {saveError && (
-                <div className="bg-theme-accent-subtle border border-theme-accent-light rounded-lg px-4 py-3 mb-4 text-xs text-theme-accent">
-                  保存失败：{saveError}
-                </div>
-              )}
-
-              <div className="flex flex-col sm:flex-row gap-3">
-                <button
-                  onClick={() => handleSave('draft')}
-                  disabled={saving}
-                  className={`flex-1 py-3 border ${themeBorder} ${themeText} rounded-full text-sm font-heading font-semibold cursor-pointer whitespace-nowrap hover:bg-theme-accent-subtle transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}
-                >
-                  {saving ? '保存中...' : editingCardId ? '更新草稿' : '保存草稿'}
-                </button>
-                <button
-                  onClick={() => handleSave('published')}
-                  disabled={saving}
-                  className={`flex-1 py-3 ${themeAccent} text-white rounded-full text-sm font-heading font-semibold cursor-pointer whitespace-nowrap hover:bg-theme-accent-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}
-                >
-                  {saving ? '发布中...' : '确认并发布'}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Success State: a collected experience, not a UUID receipt */}
-          {step === 'success' && (
-            <div className="py-8 text-center md:py-12">
-              <div className="mx-auto mb-6 flex h-12 w-12 items-center justify-center rounded-full border border-theme-accent-light text-theme-accent">
-                <i className="ri-bookmark-line text-xl" />
-              </div>
-              <span className="chapter-label">收录完成</span>
-              <h2 className={`mt-3 font-heading text-2xl font-black ${themeText} md:text-3xl`}>
-                {savedStatus === 'published' ? '这张经验名片已经公开。' : '这段走过的路，已收进你的名片册。'}
-              </h2>
-              <p className={`mx-auto mt-3 max-w-md text-sm leading-relaxed ${themeTextSec}`}>
-                {savedStatus === 'published'
-                  ? '它现在会出现在经验广场，别人可以带着自己的限制决定是否试用。'
-                  : '草稿只有你可见。等你准备好，再把它发布给真正需要的人。'}
-              </p>
-
-              <div className="collection-card-enter mx-auto mt-8 max-w-sm rounded-2xl border border-theme-border bg-theme-bg-card p-5 text-left shadow-[0_18px_48px_rgba(54,35,30,0.10)]">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="tag-red rounded-full px-2 py-0.5 text-[10px]">{savedStatus === 'published' ? 'v1 · 已发布' : '私密草稿'}</span>
-                  <span className="text-[10px] text-theme-text-muted">Experience Card</span>
-                </div>
-                <h3 className={`mt-5 text-xl font-bold leading-snug ${themeText}`}>{draft.title || '我的经验名片'}</h3>
-                <p className={`mt-3 text-sm leading-relaxed ${themeTextSec}`}>{draft.result || draft.oneLiner || draft.problem}</p>
-                {draft.suitableFor && <p className="mt-5 border-t border-theme-border pt-3 text-xs leading-relaxed text-theme-text-secondary"><span className="mr-2 text-theme-accent">适合</span>{draft.suitableFor}</p>}
-              </div>
-
-              <div className="mx-auto mt-7 flex max-w-md flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-center">
-                <button onClick={() => navigate('/my-cards')} className={`px-5 py-2.5 border ${themeBorder} ${themeText} rounded-full text-sm font-semibold hover:bg-theme-accent-subtle`}>
-                  收进我的名片册
-                </button>
-                {savedStatus === 'published' ? (
-                  <button onClick={() => navigate('/')} className={`px-5 py-2.5 ${themeAccent} text-white rounded-full text-sm font-semibold hover:bg-theme-accent-hover`}>
-                    去经验广场查看
+                  <button
+                    onClick={() => setPublisherOpen(true)}
+                    className="cursor-pointer rounded-full bg-theme-accent py-3 text-sm font-semibold text-white hover:bg-theme-accent-hover"
+                  >
+                    <i className="ri-red-packet-line mr-1.5" />
+                    生成小红书构建记录
                   </button>
-                ) : (
-                  <button onClick={() => savedCardId && navigate(`/create?draft=${savedCardId}`)} className={`px-5 py-2.5 ${themeAccent} text-white rounded-full text-sm font-semibold hover:bg-theme-accent-hover`}>
-                    继续编辑并发布
+                  <button
+                    onClick={() => navigate('/community')}
+                    className="cursor-pointer rounded-full border border-theme-accent/15 py-3 text-sm font-semibold text-theme-accent hover:bg-theme-accent-subtle sm:col-span-2"
+                  >
+                    去社区招募试用者
                   </button>
-                )}
-                {savedStatus === 'published' && <button onClick={() => setShareOpen(true)} className="px-5 py-2.5 text-sm font-semibold text-theme-accent hover:underline">分享这段经验</button>}
-              </div>
-            </div>
+                </div>
+                </div>
+              </section>
+            </CreateFade>
           )}
         </div>
       </main>
-      <Footer />
 
+      <XiaohongshuPublishModal
+        open={publisherOpen}
+        projectTitle={draft.title || '我的经验名片'}
+        onClose={() => setPublisherOpen(false)}
+      />
       <LoginModal
         isOpen={loginOpen}
         onClose={() => setLoginOpen(false)}
         reason={loginReason}
       />
-      {savedCardId && (
-        <SharePanel
-          isOpen={shareOpen}
-          onClose={() => setShareOpen(false)}
-          card={{ id: savedCardId, title: draft.title || '我的经验名片', oneLiner: draft.oneLiner || draft.result || draft.problem, suitableFor: draft.suitableFor, result: draft.result }}
-        />
-      )}
     </div>
   );
 }

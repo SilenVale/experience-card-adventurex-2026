@@ -68,7 +68,7 @@ export default function Navbar() {
               aria-label="Experience Card 首页"
             >
               <img
-                src="https://static.readdy.ai/image/6cbf0e562e068d02985042838c9e3108/dd2feede5a60d319407741ef957c018c.png"
+                src="/experience-card-logo.png"
                 alt="Experience Card"
                 className="w-6 h-6 flex-shrink-0"
               />

@@ -1,39 +1,148 @@
+import { useEffect, useRef } from 'react';
+import { gsap } from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
+
+gsap.registerPlugin(ScrollTrigger);
+
 export default function Hero() {
+  const sectionRef = useRef<HTMLElement>(null);
+  const titleLine1Ref = useRef<HTMLSpanElement>(null);
+  const titleLine2Ref = useRef<HTMLSpanElement>(null);
+  const subtitleRef = useRef<HTMLParagraphElement>(null);
+  const ctaRef = useRef<HTMLDivElement>(null);
+  const dividerRef = useRef<HTMLDivElement>(null);
+
+  const scrollToGallery = () => {
+    const el = document.getElementById('experience-gallery');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
+  useEffect(() => {
+    const ctx = gsap.context(() => {
+      const tl = gsap.timeline({ defaults: { ease: 'expo.out' } });
+
+      tl.fromTo(
+        titleLine1Ref.current,
+        {
+          y: 36,
+          scale: 1.025,
+          opacity: 0.15,
+        },
+        {
+          y: 0,
+          scale: 1,
+          opacity: 1,
+          duration: 0.85,
+          ease: 'expo.out',
+        }
+      );
+
+      tl.fromTo(
+        titleLine2Ref.current,
+        {
+          y: 42,
+          scale: 1.04,
+          opacity: 0.15,
+        },
+        {
+          y: 0,
+          scale: 1,
+          opacity: 1,
+          duration: 0.95,
+          ease: 'expo.out',
+        },
+        '-=0.6'
+      );
+
+      tl.fromTo(
+        subtitleRef.current,
+        { y: 20, opacity: 0.4 },
+        { y: 0, opacity: 1, duration: 0.65, ease: 'power3.out' },
+        '-=0.45'
+      );
+
+      tl.fromTo(
+        ctaRef.current,
+        { y: 16, opacity: 0.35 },
+        { y: 0, opacity: 1, duration: 0.55, ease: 'power3.out' },
+        '-=0.4'
+      );
+
+      // Divider: fades in as user scrolls down from hero
+      gsap.fromTo(
+        dividerRef.current,
+        { scaleX: 0, opacity: 0, transformOrigin: 'center' },
+        {
+          scaleX: 1,
+          opacity: 1,
+          duration: 1.0,
+          ease: 'power3.out',
+          scrollTrigger: {
+            trigger: sectionRef.current,
+            start: 'top 30%',
+            end: 'top 20%',
+            once: true,
+          },
+        }
+      );
+    }, sectionRef);
+
+    return () => ctx.revert();
+  }, []);
+
   return (
-    <section className="relative w-full min-h-[60vh] md:min-h-[70vh] flex items-center bg-theme-bg overflow-hidden transition-colors duration-300">
-      {/* Subtle radial glow */}
-      <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-theme-accent-light rounded-full blur-[120px] opacity-40 pointer-events-none" />
+    <section
+      ref={sectionRef}
+      className="relative w-full min-h-screen flex items-center justify-center overflow-hidden"
+    >
+      {/* Soft radial glow top-right */}
+      <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-theme-accent-light rounded-full blur-[120px] opacity-20 pointer-events-none z-[1]" />
 
-      <div className="relative z-10 w-full px-4 md:px-12 lg:px-16 max-w-site mx-auto pt-24 md:pt-28 pb-12 md:pb-16">
-        <div className="max-w-3xl">
-          <h1 className="font-heading font-black text-theme-text leading-[0.92] tracking-tighter2 mb-5 md:mb-6 text-4xl sm:text-5xl md:text-6xl lg:text-7xl">
-            <span className="reveal-title block">让经验成为彼此的</span>
-            <span className="text-theme-accent reveal-title block" style={{ animationDelay: '0.5s' }}>
-              下一步
-            </span>
-          </h1>
-
-          <p
-            className="text-theme-text-secondary max-w-lg text-sm md:text-base leading-relaxed mb-8 fade-up visible"
-            style={{ transitionDelay: '0.8s' }}
+      {/* Center content */}
+      <div className="relative z-10 w-full px-4 md:px-8 flex flex-col items-center text-center pt-20 pb-24">
+        <h1 className="font-heading font-black text-theme-text leading-[0.92] tracking-tighter2">
+          <span
+            ref={titleLine1Ref}
+            className="block text-5xl sm:text-6xl md:text-7xl lg:text-8xl xl:text-9xl"
           >
-            一件你真实做成过的事，被整理成另一个人可以判断的经验。
-            <br />
-            不是简历，不是教程，不是照搬答案。
-          </p>
-
-          {/* Scroll hint */}
-          <div
-            className="flex items-center gap-2 text-theme-text-muted fade-up visible"
-            style={{ transitionDelay: '1.2s' }}
+            让经验成为彼此的
+          </span>
+          <span
+            ref={titleLine2Ref}
+            className="block text-theme-accent text-5xl sm:text-6xl md:text-7xl lg:text-8xl xl:text-9xl"
           >
-            <div className="w-4 h-6 rounded-full border border-theme-text-muted/30 flex items-start justify-center p-0.5">
-              <div className="w-1 h-1.5 rounded-full bg-theme-accent/40 animate-bounce" />
-            </div>
-            <span className="text-xs">向下探索</span>
-          </div>
+            下一步
+          </span>
+        </h1>
+
+        <p
+          ref={subtitleRef}
+          className="mt-6 md:mt-8 text-theme-text-secondary max-w-lg text-sm md:text-base lg:text-lg leading-relaxed"
+        >
+          一件你真实做成过的事，被整理成另一个人可以判断的经验。
+          <br />
+          不是简历，不是教程，不是照搬答案。
+        </p>
+
+        {/* CTA — smooth-scroll to Gallery */}
+        <div ref={ctaRef} className="mt-8 md:mt-10">
+          <button
+            onClick={scrollToGallery}
+            className="inline-flex items-center gap-2.5 px-8 py-3.5 bg-theme-accent text-white text-sm md:text-base font-semibold rounded-full hover:brightness-110 transition-all whitespace-nowrap cursor-pointer"
+          >
+            去经验广场
+            <i className="ri-arrow-right-line" />
+          </button>
         </div>
       </div>
+
+      {/* Subtle section divider — scroll-triggered fade-in */}
+      <div
+        ref={dividerRef}
+        className="absolute bottom-8 left-1/2 -translate-x-1/2 w-[30%] h-px bg-gradient-to-r from-transparent via-theme-border/25 to-transparent pointer-events-none z-10"
+      />
     </section>
   );
 }

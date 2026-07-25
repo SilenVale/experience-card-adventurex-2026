@@ -1,6 +1,9 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Navbar from '@/components/feature/Navbar';
-import Footer from '@/components/feature/Footer';
+import CommunityOverview from './components/CommunityOverview';
+import BuildPublicTimeline from './components/BuildPublicTimeline';
+import XiaohongshuPublishModal from './components/XiaohongshuPublishModal';
 import {
   communityTabs,
   coCreatingItems,
@@ -9,22 +12,15 @@ import {
   needHelpItems,
 } from '@/mocks/communityData';
 
-type NewRequestType = 'trial' | 'partner' | 'help' | null;
-
 export default function CommunityPage() {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('cocreating');
-  const [showNewRequest, setShowNewRequest] = useState(false);
-  const [requestType, setRequestType] = useState<NewRequestType>(null);
-  const [requestSubmitted, setRequestSubmitted] = useState(false);
+  const [publisherOpen, setPublisherOpen] = useState(false);
+  const [publisherProjectTitle, setPublisherProjectTitle] = useState('零预算办校园活动');
 
-  const handleNewRequest = (type: NewRequestType) => {
-    setRequestType(type);
-    setShowNewRequest(false);
-    setRequestSubmitted(false);
-  };
-
-  const handleSubmitRequest = () => {
-    setRequestSubmitted(true);
+  const openPublisher = (projectTitle: string) => {
+    setPublisherProjectTitle(projectTitle);
+    setPublisherOpen(true);
   };
 
   return (
@@ -32,7 +28,7 @@ export default function CommunityPage() {
       <Navbar />
 
       <main className="pt-16 pb-20">
-        <div className="max-w-4xl mx-auto px-4 md:px-8 py-8 md:py-12">
+        <div className="max-w-6xl mx-auto px-4 md:px-8 py-8 md:py-12">
           {/* Header */}
           <div className="mb-8 md:mb-10">
             <h1 className="font-heading font-black text-theme-text text-2xl md:text-4xl leading-tight mb-3">
@@ -86,195 +82,123 @@ export default function CommunityPage() {
                 </button>
               ))}
             </div>
-            <div className="relative ml-auto">
-              <button
-                onClick={() => setShowNewRequest(!showNewRequest)}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-heading font-medium border border-theme-gold-light text-theme-gold hover:bg-theme-gold-subtle transition-all cursor-pointer whitespace-nowrap"
-              >
-                <i className="ri-add-line" />
-                发起请求
-              </button>
-
-              {showNewRequest && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setShowNewRequest(false)} />
-                  <div className="absolute right-0 top-full mt-1 bg-theme-bg-card border border-theme-accent-light rounded-xl w-56 p-1 z-50 shadow-lg">
-                    <button
-                      onClick={() => handleNewRequest('trial')}
-                      className="w-full text-left px-3 py-2 text-xs text-theme-text hover:bg-theme-accent-subtle rounded-lg transition-colors cursor-pointer"
-                    >
-                      我想找人试用一段经验
-                    </button>
-                    <button
-                      onClick={() => handleNewRequest('partner')}
-                      className="w-full text-left px-3 py-2 text-xs text-theme-text hover:bg-theme-accent-subtle rounded-lg transition-colors cursor-pointer"
-                    >
-                      我想找人一起完成一件事
-                    </button>
-                    <button
-                      onClick={() => handleNewRequest('help')}
-                      className="w-full text-left px-3 py-2 text-xs text-theme-text hover:bg-theme-accent-subtle rounded-lg transition-colors cursor-pointer"
-                    >
-                      我卡在一个问题上，需要经验帮助
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
+            <button
+              onClick={() => navigate('/create')}
+              className="ml-auto flex items-center gap-1.5 rounded-full border border-theme-gold-light px-3.5 py-1.5 text-xs font-medium text-theme-gold transition-colors hover:bg-theme-gold-subtle"
+              title="先创建并发布一张经验卡，再邀请别人试用"
+            >
+              <i className="ri-add-line" />
+              发起请求
+            </button>
           </div>
-
-          {/* Request Form Modal */}
-          {requestType && !requestSubmitted && (
-            <>
-              <div className="fixed inset-0 bg-black/70 z-[100]" onClick={() => setRequestType(null)} />
-              <div className="fixed inset-0 flex items-center justify-center z-[101] px-4">
-                <div className="bg-theme-bg-card border border-theme-accent-light rounded-xl w-full max-w-md p-6 shadow-xl max-h-[80vh] overflow-y-auto">
-                  <h3 className="font-heading font-bold text-theme-text text-base mb-4">
-                    {requestType === 'trial' && '找人试用一段经验'}
-                    {requestType === 'partner' && '找人一起完成一件事'}
-                    {requestType === 'help' && '需要经验帮助'}
-                  </h3>
-
-                  {requestType === 'trial' && (
-                    <div className="space-y-3 mb-5">
-                      <textarea
-                        className="w-full bg-theme-bg-card-alt border border-theme-accent-light rounded-lg px-3.5 py-2.5 text-sm text-theme-text placeholder:text-theme-text-muted focus:outline-none focus:border-theme-accent transition-colors resize-none h-24"
-                        placeholder="描述你想找人试用的经验，以及你希望对方处于什么情境中..."
-                      />
-                      <input
-                        className="w-full bg-theme-bg-card-alt border border-theme-accent-light rounded-lg px-3.5 py-2.5 text-sm text-theme-text placeholder:text-theme-text-muted focus:outline-none focus:border-theme-accent transition-colors"
-                        placeholder="适合什么类型的人试用？（可选）"
-                      />
-                    </div>
-                  )}
-
-                  {requestType === 'partner' && (
-                    <div className="space-y-3 mb-5">
-                      <textarea
-                        className="w-full bg-theme-bg-card-alt border border-theme-accent-light rounded-lg px-3.5 py-2.5 text-sm text-theme-text placeholder:text-theme-text-muted focus:outline-none focus:border-theme-accent transition-colors resize-none h-20"
-                        placeholder="描述你正在推进什么..."
-                      />
-                      <input
-                        className="w-full bg-theme-bg-card-alt border border-theme-accent-light rounded-lg px-3.5 py-2.5 text-sm text-theme-text placeholder:text-theme-text-muted focus:outline-none focus:border-theme-accent transition-colors"
-                        placeholder="你已经做到哪里了？"
-                      />
-                      <input
-                        className="w-full bg-theme-bg-card-alt border border-theme-accent-light rounded-lg px-3.5 py-2.5 text-sm text-theme-text placeholder:text-theme-text-muted focus:outline-none focus:border-theme-accent transition-colors"
-                        placeholder="你希望一起完成什么？"
-                      />
-                    </div>
-                  )}
-
-                  {requestType === 'help' && (
-                    <div className="space-y-3 mb-5">
-                      <textarea
-                        className="w-full bg-theme-bg-card-alt border border-theme-accent-light rounded-lg px-3.5 py-2.5 text-sm text-theme-text placeholder:text-theme-text-muted focus:outline-none focus:border-theme-accent transition-colors resize-none h-20"
-                        placeholder="描述你卡在什么地方..."
-                      />
-                      <textarea
-                        className="w-full bg-theme-bg-card-alt border border-theme-accent-light rounded-lg px-3.5 py-2.5 text-sm text-theme-text placeholder:text-theme-text-muted focus:outline-none focus:border-theme-accent transition-colors resize-none h-16"
-                        placeholder="你的限制是什么？（时间、资源等）"
-                      />
-                    </div>
-                  )}
-
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => setRequestType(null)}
-                      className="flex-1 py-2.5 border border-theme-border text-theme-text-secondary hover:text-theme-text rounded-full text-sm cursor-pointer whitespace-nowrap transition-colors"
-                    >
-                      取消
-                    </button>
-                    <button
-                      onClick={handleSubmitRequest}
-                      className="flex-1 py-2.5 bg-theme-accent text-white rounded-full text-sm font-heading font-semibold cursor-pointer whitespace-nowrap hover:bg-theme-accent-hover transition-colors"
-                    >
-                      发布请求
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* Request Success */}
-          {requestType && requestSubmitted && (
-            <>
-              <div className="fixed inset-0 bg-black/70 z-[100]" onClick={() => { setRequestType(null); setRequestSubmitted(false); }} />
-              <div className="fixed inset-0 flex items-center justify-center z-[101] px-4">
-                <div className="bg-theme-bg-card border border-theme-accent-light rounded-xl w-full max-w-sm p-6 shadow-xl text-center">
-                  <div className="w-12 h-12 mx-auto mb-3 flex items-center justify-center">
-                    <i className="ri-check-line text-2xl text-theme-gold" />
-                  </div>
-                  <h3 className="font-heading font-bold text-theme-text text-base mb-2">请求已发布</h3>
-                  <p className="text-sm text-theme-text-secondary mb-4">
-                    你的请求已发送到社区。有人回应时会通知你。
-                  </p>
-                  <span className="text-[10px] tag-ivory px-2 py-0.5 rounded-full inline-block">
-                    原型演示 · 示例状态
-                  </span>
-                </div>
-              </div>
-            </>
-          )}
 
           {/* Tab Content */}
           <div className="min-h-[400px]">
             {activeTab === 'cocreating' && (
               <div className="space-y-6">
+                <CommunityOverview
+                  onOpenPublisher={openPublisher}
+                  onJoinTask={() => navigate('/')}
+                />
                 {coCreatingItems.map((item) => (
-                  <div
+                  <article
                     key={item.id}
-                    className="bg-theme-bg-card border border-theme-accent-subtle rounded-xl p-5 hover:border-theme-gold-light transition-colors"
+                    className="ui-motion overflow-hidden rounded-[22px] border border-theme-accent-subtle bg-theme-bg-card p-4 shadow-[0_16px_45px_rgba(89,52,43,0.05)] transition-colors hover:border-theme-gold-light md:p-5"
                   >
-                    <h3 className="font-heading font-bold text-theme-text text-base mb-4 flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-theme-accent/60" />
-                      {item.title}
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div className="bg-theme-bg-card-alt rounded-lg p-3.5">
-                        <span className="text-[10px] tag-ivory px-1.5 py-0.5 rounded-full mb-1.5 inline-block">v1</span>
-                        <p className="text-xs text-theme-text-secondary leading-relaxed">{item.v1Summary}</p>
+                    <div className="mb-4 flex flex-wrap items-start gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="mb-2 flex flex-wrap items-center gap-2">
+                          <span className="rounded-full border border-theme-accent/15 bg-theme-accent-subtle px-2.5 py-1 text-[9px] font-semibold text-theme-accent">
+                            {item.phase}
+                          </span>
+                          <span className="rounded-full border border-theme-border px-2.5 py-1 text-[9px] text-theme-text-muted">
+                            {item.visibility}
+                          </span>
+                          <span className="rounded-full border border-theme-border px-2.5 py-1 text-[9px] text-theme-text-muted">
+                            展示样本
+                          </span>
+                        </div>
+                        <h3 className="flex items-center gap-2 font-heading text-base font-bold text-theme-text">
+                          <span className="h-1.5 w-1.5 rounded-full bg-theme-accent/60" />
+                          {item.title}
+                        </h3>
+                        <p className="mt-1.5 text-[10px] text-theme-text-muted">
+                          需要：{item.neededRole} · 截止 {item.deadline}
+                        </p>
                       </div>
-                      <div className="flex flex-col justify-center gap-1.5 py-2">
-                        {item.feedback.map((fb, i) => (
-                          <div key={i} className="flex items-center gap-1.5">
-                            <i className="ri-chat-1-line text-[10px] text-theme-gold/50" />
-                            <span className="text-[11px] text-theme-text-secondary">{fb}</span>
-                          </div>
-                        ))}
-                        <div className="h-px w-8 bg-theme-gold-light my-1" />
-                        <span className="text-[10px] text-theme-gold-dark/60">匿名试用者反馈</span>
-                      </div>
-                      <div className="bg-theme-bg-card-alt rounded-lg p-3.5 border border-theme-gold-subtle">
-                        <span className="text-[10px] tag-gold px-1.5 py-0.5 rounded-full mb-1.5 inline-block">v2</span>
-                        <p className="text-xs text-theme-text-secondary leading-relaxed">{item.v2Changes}</p>
+                      <div className="w-full sm:w-40">
+                        <div className="mb-1.5 flex justify-between text-[9px] text-theme-text-muted">
+                          <span>{item.participantCount} 人参与</span>
+                          <span>{item.progress}%</span>
+                        </div>
+                        <div className="h-1.5 overflow-hidden rounded-full bg-theme-bg-card-alt">
+                          <div className="h-full rounded-full bg-theme-accent" style={{ width: `${item.progress}%` }} />
+                        </div>
                       </div>
                     </div>
-                  </div>
+
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                      <div className="rounded-lg bg-theme-bg-card-alt p-3.5">
+                        <span className="tag-ivory mb-1.5 inline-block rounded-full px-1.5 py-0.5 text-[10px]">v1</span>
+                        <p className="text-xs leading-relaxed text-theme-text-secondary">{item.v1Summary}</p>
+                      </div>
+                      <div className="flex flex-col justify-center gap-1.5 py-2">
+                        {item.feedback.map((feedback) => (
+                          <div key={feedback} className="flex items-center gap-1.5">
+                            <i className="ri-chat-1-line text-[10px] text-theme-gold/50" />
+                            <span className="text-[11px] text-theme-text-secondary">{feedback}</span>
+                          </div>
+                        ))}
+                        <div className="my-1 h-px w-8 bg-theme-gold-light" />
+                        <span className="text-[10px] text-theme-gold-dark/60">匿名试用者反馈</span>
+                      </div>
+                      <div className="rounded-lg border border-theme-gold-subtle bg-theme-bg-card-alt p-3.5">
+                        <span className="tag-gold mb-1.5 inline-block rounded-full px-1.5 py-0.5 text-[10px]">v2</span>
+                        <p className="text-xs leading-relaxed text-theme-text-secondary">{item.v2Changes}</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 flex flex-col gap-2 border-t border-dashed border-theme-border pt-4 sm:flex-row sm:justify-end">
+                      <button
+                        onClick={() => navigate('/')}
+                        className="rounded-full border border-theme-text/10 px-4 py-2 text-xs font-semibold text-theme-text transition-colors hover:bg-theme-bg-card-alt"
+                      >
+                        参与这次试用
+                      </button>
+                      <button
+                        onClick={() => openPublisher(item.title)}
+                        className="rounded-full bg-theme-accent px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-theme-accent-hover"
+                      >
+                        <i className="ri-red-packet-line mr-1.5" />
+                        生成公开构建记录
+                      </button>
+                    </div>
+                  </article>
                 ))}
               </div>
             )}
 
+            {activeTab === 'build-public' && <BuildPublicTimeline onOpenPublisher={openPublisher} />}
+
             {activeTab === 'seeking-trial' && (
               <div className="space-y-4">
                 {seekingTrialItems.map((item) => (
-                  <div key={item.id} className="bg-theme-bg-card border border-theme-accent-subtle rounded-xl p-5">
-                    <div className="flex items-start gap-3 mb-3">
-                      <div className="w-8 h-8 rounded-full bg-theme-bg-card-alt border border-theme-accent-light flex items-center justify-center flex-shrink-0">
+                  <article key={item.id} className="ui-motion rounded-xl border border-theme-accent-subtle bg-theme-bg-card p-5">
+                    <div className="mb-3 flex items-start gap-3">
+                      <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-theme-accent-light bg-theme-bg-card-alt">
                         <i className="ri-user-search-line text-sm text-theme-accent/60" />
                       </div>
                       <div>
-                        <h3 className="text-sm font-heading font-semibold text-theme-text mb-1">{item.cardTitle}</h3>
-                        <p className="text-[11px] text-theme-text-secondary">{item.authorIdentity}</p>
+                        <h3 className="mb-1 text-sm font-semibold text-theme-text">{item.cardTitle}</h3>
+                        <p className="text-[11px] text-theme-text-secondary">{item.authorIdentity} · 展示样本</p>
                       </div>
                     </div>
-                    <p className="text-xs text-theme-text-secondary leading-relaxed mb-3">{item.message}</p>
-                    <p className="text-[10px] text-theme-gold-dark/60 mb-3">{item.seekingContext}</p>
-                    <button className="px-4 py-1.5 bg-theme-accent text-white rounded-full text-xs font-heading font-medium cursor-pointer whitespace-nowrap hover:bg-theme-accent-hover transition-colors">
+                    <p className="mb-3 text-xs leading-relaxed text-theme-text-secondary">{item.message}</p>
+                    <p className="mb-3 text-[10px] text-theme-gold-dark/60">{item.seekingContext}</p>
+                    <button onClick={() => navigate('/')} className="rounded-full bg-theme-accent px-4 py-1.5 text-xs font-medium text-white hover:bg-theme-accent-hover">
                       我正在遇到类似问题
                     </button>
-                  </div>
+                  </article>
                 ))}
               </div>
             )}
@@ -282,34 +206,18 @@ export default function CommunityPage() {
             {activeTab === 'seeking-partner' && (
               <div className="space-y-4">
                 {seekingPartnerItems.map((item) => (
-                  <div key={item.id} className="bg-theme-bg-card border border-theme-accent-subtle rounded-xl p-5">
-                    <div className="flex items-start gap-3 mb-3">
-                      <div className="w-8 h-8 rounded-full bg-theme-bg-card-alt border border-theme-accent-light flex items-center justify-center flex-shrink-0">
-                        <i className="ri-team-line text-sm text-theme-accent/60" />
-                      </div>
-                      <div>
-                        <h3 className="text-sm font-heading font-semibold text-theme-text mb-1">{item.what}</h3>
-                        <p className="text-[11px] text-theme-text-secondary">{item.authorIdentity}</p>
-                      </div>
-                    </div>
-                    <div className="space-y-2 mb-3">
-                      <div className="flex items-start gap-2">
-                        <span className="text-[10px] text-theme-accent/50 w-16 flex-shrink-0">已做到</span>
-                        <span className="text-xs text-theme-text-secondary">{item.progress}</span>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <span className="text-[10px] text-theme-gold-dark/50 w-16 flex-shrink-0">需要</span>
-                        <span className="text-xs text-theme-text-secondary">{item.need}</span>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <span className="text-[10px] text-theme-accent/50 w-16 flex-shrink-0">经验卡</span>
-                        <span className="text-xs text-theme-text-secondary">{item.experienceCard}</span>
-                      </div>
-                    </div>
-                    <button className="px-4 py-1.5 border border-theme-gold-light text-theme-gold rounded-full text-xs font-heading font-medium cursor-pointer whitespace-nowrap hover:bg-theme-gold-subtle transition-colors">
+                  <article key={item.id} className="ui-motion rounded-xl border border-theme-accent-subtle bg-theme-bg-card p-5">
+                    <h3 className="mb-1 text-sm font-semibold text-theme-text">{item.what}</h3>
+                    <p className="mb-4 text-[11px] text-theme-text-secondary">{item.authorIdentity} · 展示样本</p>
+                    <dl className="mb-3 space-y-2 text-xs text-theme-text-secondary">
+                      <div className="flex gap-2"><dt className="w-16 flex-shrink-0 text-theme-accent/60">已做到</dt><dd>{item.progress}</dd></div>
+                      <div className="flex gap-2"><dt className="w-16 flex-shrink-0 text-theme-gold-dark/60">需要</dt><dd>{item.need}</dd></div>
+                      <div className="flex gap-2"><dt className="w-16 flex-shrink-0 text-theme-accent/60">经验卡</dt><dd>{item.experienceCard}</dd></div>
+                    </dl>
+                    <button onClick={() => navigate('/')} className="rounded-full border border-theme-gold-light px-4 py-1.5 text-xs font-medium text-theme-gold hover:bg-theme-gold-subtle">
                       我可以用一张经验卡回应
                     </button>
-                  </div>
+                  </article>
                 ))}
               </div>
             )}
@@ -317,32 +225,29 @@ export default function CommunityPage() {
             {activeTab === 'need-help' && (
               <div className="space-y-4">
                 {needHelpItems.map((item) => (
-                  <div key={item.id} className="bg-theme-bg-card border border-theme-accent-subtle rounded-xl p-5">
-                    <div className="flex items-start gap-3 mb-3">
-                      <div className="w-8 h-8 rounded-full bg-theme-bg-card-alt border border-theme-accent-light flex items-center justify-center flex-shrink-0">
-                        <i className="ri-question-line text-sm text-theme-accent/60" />
-                      </div>
-                      <div>
-                        <h3 className="text-sm font-heading font-semibold text-theme-text mb-1">{item.problem}</h3>
-                        <p className="text-[11px] text-theme-text-secondary">{item.authorIdentity}</p>
-                      </div>
-                    </div>
-                    <div className="bg-theme-bg-card-alt rounded-lg p-3 mb-3">
+                  <article key={item.id} className="ui-motion rounded-xl border border-theme-accent-subtle bg-theme-bg-card p-5">
+                    <h3 className="mb-1 text-sm font-semibold text-theme-text">{item.problem}</h3>
+                    <p className="mb-3 text-[11px] text-theme-text-secondary">{item.authorIdentity} · 展示样本</p>
+                    <div className="mb-3 rounded-lg bg-theme-bg-card-alt p-3">
                       <span className="text-[10px] text-theme-accent/50">限制条件</span>
-                      <p className="text-xs text-theme-text-secondary mt-1">{item.constraints}</p>
+                      <p className="mt-1 text-xs text-theme-text-secondary">{item.constraints}</p>
                     </div>
-                    <p className="text-xs text-theme-gold mb-3">希望找到：{item.whatLookingFor}</p>
-                    <button className="px-4 py-1.5 bg-theme-accent text-white rounded-full text-xs font-heading font-medium cursor-pointer whitespace-nowrap hover:bg-theme-accent-hover transition-colors">
+                    <p className="mb-3 text-xs text-theme-gold">希望找到：{item.whatLookingFor}</p>
+                    <button onClick={() => navigate('/')} className="rounded-full bg-theme-accent px-4 py-1.5 text-xs font-medium text-white hover:bg-theme-accent-hover">
                       用经验卡回应
                     </button>
-                  </div>
+                  </article>
                 ))}
               </div>
             )}
           </div>
         </div>
       </main>
-      <Footer />
+      <XiaohongshuPublishModal
+        open={publisherOpen}
+        projectTitle={publisherProjectTitle}
+        onClose={() => setPublisherOpen(false)}
+      />
     </div>
   );
 }

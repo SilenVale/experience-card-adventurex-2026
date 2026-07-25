@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import type { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
@@ -8,8 +9,12 @@ interface AuthState {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  signUp: (email: string, password: string) => Promise<{ error: string | null }>;
+  signUp: (email: string, password: string) => Promise<{
+    error: string | null;
+    requiresEmailConfirmation: boolean;
+  }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
+  resendConfirmation: (email: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 }
 
@@ -69,19 +74,37 @@ export function AppProviders({ children }: { children: ReactNode }) {
 
   const signUp = useCallback(async (email: string, password: string) => {
     const emailRedirectTo = `${window.location.origin}${import.meta.env.BASE_URL}auth/callback`;
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: { emailRedirectTo },
     });
-    if (error) return { error: error.message };
-    return { error: null };
+    if (error) return { error: error.message, requiresEmailConfirmation: false };
+    return { error: null, requiresEmailConfirmation: !data.session };
   }, []);
 
   const signIn = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) return { error: error.message };
+    if (error) {
+      if (error.message.toLowerCase().includes('email not confirmed')) {
+        return { error: '邮箱还没有确认。请先点击 Supabase 发来的确认邮件，再回来登录。' };
+      }
+      if (error.message.toLowerCase().includes('invalid login credentials')) {
+        return { error: '邮箱或密码不正确；如果刚注册，请先完成邮箱确认。' };
+      }
+      return { error: error.message };
+    }
     return { error: null };
+  }, []);
+
+  const resendConfirmation = useCallback(async (email: string) => {
+    const emailRedirectTo = `${window.location.origin}${import.meta.env.BASE_URL}auth/callback`;
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email,
+      options: { emailRedirectTo },
+    });
+    return { error: error?.message ?? null };
   }, []);
 
   const signOut = useCallback(async () => {
@@ -106,7 +129,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, signUp, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, session, loading, signUp, signIn, resendConfirmation, signOut }}>
       <ThemeContext.Provider value={{ theme, toggleTheme }}>
         {children}
       </ThemeContext.Provider>

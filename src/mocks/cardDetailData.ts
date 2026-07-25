@@ -10,6 +10,7 @@ export interface CardDetailData {
   result: string;
   suitableFor: string;
   boundary: string;
+  pitfall?: string;
   boundaryNote: string;
   microAction: string;
   versionHistory: {

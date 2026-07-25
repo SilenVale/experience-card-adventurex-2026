@@ -56,7 +56,6 @@ LLM 用户消息粘贴：`原始经历：{{#raw_experience#}}\n五问答案：{{
 - `card_json`
 - `user_situation`
 - `user_constraints`
-- `instruction`
 
 输出节点必须暴露 `result`（文本），内容必须是下列 JSON：
 
@@ -85,8 +84,8 @@ LLM 用户消息粘贴：`经验卡：{{#card_json#}}\n试用者情境：{{#user
 
 - 两个 Workflow 都必须点击 Dify 的“发布”后再复制 API Key；未发布的 Workflow 不能被 `/workflows/run` 调用。
 - Dify Key 仅设置为 Supabase Edge Function Secrets：
-  - `DIFY_GENERATE_CARD_API_KEY`
-  - `DIFY_TRIAL_MATCH_API_KEY`
+- `DIFY_API_KEY`
+- `DIFY_TRIAL_MATCH_API_KEY`
 - 可选：若不是 Dify Cloud，再设置 `DIFY_BASE_URL`；Dify Cloud 默认值为 `https://api.dify.ai/v1`。
 - 浏览器 `.env` 只允许 Supabase URL 和 anon key；绝不出现 Dify Key。
 - Supabase 中部署两个函数：`dify-generate-card`、`dify-trial-match`。两者均启用 JWT 验证；生成函数还要求登录用户与 `sharing_consent=true`。

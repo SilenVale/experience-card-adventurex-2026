@@ -48,6 +48,18 @@ export interface TrialFeedbackInput {
   boundaryNote: string;
 }
 
+export interface TrialFeedbackRecord {
+  id: string;
+  card_id: string;
+  situation: string;
+  constraints: string;
+  trial_result: TrialFeedbackInput['trialResult'];
+  reason: string;
+  micro_action: string;
+  boundary_note: string;
+  created_at: string;
+}
+
 export interface TrialResult {
   trialResult: TrialFeedbackInput['trialResult'];
   reason: string;
@@ -175,6 +187,19 @@ export async function saveTrialFeedback(input: TrialFeedbackInput) {
   });
 
   if (error) throw new Error(error.message);
+}
+
+export async function listTrialFeedbackForCards(cardIds: string[]) {
+  if (!cardIds.length) return [] as TrialFeedbackRecord[];
+
+  const { data, error } = await supabase
+    .from('trial_feedback')
+    .select('id, card_id, situation, constraints, trial_result, reason, micro_action, boundary_note, created_at')
+    .in('card_id', cardIds)
+    .order('created_at', { ascending: false });
+
+  if (error) throw new Error(error.message);
+  return (data ?? []) as TrialFeedbackRecord[];
 }
 
 export function generateDemoTrialResult(constraints: string): TrialResult {

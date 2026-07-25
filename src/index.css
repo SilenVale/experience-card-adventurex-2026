@@ -245,6 +245,79 @@
     to { opacity: 1; transform: translateY(0) rotate(0deg) scale(1); }
   }
 
+  /* Shared motion language from the UI handoff */
+  .experience-motion button,
+  .experience-motion a,
+  .experience-motion summary {
+    transition:
+      transform 420ms cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 420ms cubic-bezier(0.22, 1, 0.36, 1),
+      background-color 280ms ease,
+      border-color 280ms ease,
+      color 280ms ease,
+      opacity 280ms ease;
+  }
+
+  .experience-motion button:not(:disabled):hover,
+  .experience-motion a:hover {
+    transform: translateY(-2px);
+  }
+
+  .experience-motion button:not(:disabled):active,
+  .experience-motion a:active {
+    transform: translateY(0) scale(0.975);
+    transition-duration: 120ms;
+  }
+
+  .experience-motion button:focus-visible,
+  .experience-motion a:focus-visible,
+  .experience-motion summary:focus-visible {
+    outline: 2px solid rgba(230, 59, 48, 0.3);
+    outline-offset: 3px;
+  }
+
+  .experience-motion input,
+  .experience-motion textarea {
+    transition:
+      border-color 280ms ease,
+      background-color 280ms ease,
+      box-shadow 320ms cubic-bezier(0.22, 1, 0.36, 1),
+      transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .experience-motion input:focus,
+  .experience-motion textarea:focus {
+    box-shadow: 0 0 0 4px rgba(230, 59, 48, 0.055);
+  }
+
+  .experience-motion .ui-motion {
+    transition:
+      transform 520ms cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 520ms cubic-bezier(0.22, 1, 0.36, 1),
+      border-color 320ms ease,
+      background-color 320ms ease;
+  }
+
+  .experience-motion .ui-motion:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 18px 46px rgba(89, 52, 43, 0.075);
+  }
+
+  .experience-motion details[open] > summary {
+    border-color: rgba(230, 59, 48, 0.14);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .experience-motion *,
+    .experience-motion *::before,
+    .experience-motion *::after {
+      scroll-behavior: auto !important;
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
   /* Form anti-spam honeypot */
   .hp-field {
     position: absolute;

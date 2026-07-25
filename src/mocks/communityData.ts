@@ -11,7 +11,82 @@ export interface CoCreatingItem {
   feedback: string[];
   v2Changes: string;
   v2Summary: string;
+  phase: string;
+  progress: number;
+  participantCount: number;
+  deadline: string;
+  neededRole: string;
+  visibility: '公开摘要' | '共创者可见';
 }
+
+export interface BuildLogItem {
+  id: string;
+  day: string;
+  date: string;
+  title: string;
+  summary: string;
+  change: string;
+  visibility: '公开' | '共创者可见' | '私人草稿';
+  xiaohongshuStatus: '已发布' | '待发布';
+  xiaohongshuUrl?: string;
+}
+
+export interface CommunityActivityItem {
+  id: string;
+  icon: string;
+  text: string;
+  time: string;
+  accent?: boolean;
+}
+
+export const communityStats = [
+  { value: '12', label: '张经验正在共创', note: '比昨天 +2' },
+  { value: '26', label: '人参与过试用', note: '本周新增 8 人' },
+  { value: '05', label: '个版本形成 v2', note: '9 条反馈被采纳' },
+  { value: '03', label: '个项目正在招募', note: '均可在 30 分钟内参与' },
+];
+
+export const buildLogItems: BuildLogItem[] = [
+  {
+    id: 'build-01',
+    day: '01',
+    date: '07.21',
+    title: '我们先确认了真正的问题',
+    summary: '不是单纯增加报名人数，而是让对 AI 感兴趣但不敢开始的同学，知道活动能给自己一个低门槛实践入口。',
+    change: '把活动目标从“传播 AI”改成“现场完成第一个 AI 小工具”。',
+    visibility: '公开',
+    xiaohongshuStatus: '已发布',
+    xiaohongshuUrl: 'https://www.xiaohongshu.com/',
+  },
+  {
+    id: 'build-02',
+    day: '02',
+    date: '07.22',
+    title: '第一版招募文案没有人回应',
+    summary: '“欢迎所有对 AI 感兴趣的人”太宽泛，读者无法判断自己是否适合，也不知道现场会发生什么。',
+    change: '明确零基础、十分钟完成演示任务，并写出当天可带走的结果。',
+    visibility: '公开',
+    xiaohongshuStatus: '已发布',
+    xiaohongshuUrl: 'https://www.xiaohongshu.com/',
+  },
+  {
+    id: 'build-03',
+    day: '03',
+    date: '今天',
+    title: '社区补上了我们没看到的一步',
+    summary: '三位试用者都问：没有社群基础时，第一批愿意转发的人从哪里来？',
+    change: '正在补充“先找到 5 位种子参与者”的动作清单与私信边界。',
+    visibility: '共创者可见',
+    xiaohongshuStatus: '待发布',
+  },
+];
+
+export const communityActivities: CommunityActivityItem[] = [
+  { id: 'activity-01', icon: 'ri-flask-line', text: '小陈完成了《零预算办校园活动》的第一次试用', time: '8 分钟前', accent: true },
+  { id: 'activity-02', icon: 'ri-git-commit-line', text: '一条关于“种子参与者”的反馈被采纳进入 v2', time: '21 分钟前' },
+  { id: 'activity-03', icon: 'ri-bookmark-3-line', text: '「第一次作品集」新增了 2 位共创者', time: '1 小时前' },
+  { id: 'activity-04', icon: 'ri-red-packet-line', text: '新的小红书构建记录已绑定到公开时间线', time: '今天 10:24' },
+];
 
 export interface SeekingTrialItem {
   id: string;
@@ -40,6 +115,7 @@ export interface NeedHelpItem {
 
 export const communityTabs: CommunityTabData[] = [
   { id: 'cocreating', label: '共创中的经验', icon: 'ri-loop-left-line' },
+  { id: 'build-public', label: '公开构建', icon: 'ri-broadcast-line' },
   { id: 'seeking-trial', label: '寻求试用者', icon: 'ri-user-search-line' },
   { id: 'seeking-partner', label: '寻找协作伙伴', icon: 'ri-team-line' },
   { id: 'need-help', label: '我需要帮助', icon: 'ri-question-line' },
@@ -53,6 +129,12 @@ export const coCreatingItems: CoCreatingItem[] = [
     feedback: ['没有资源时，第一批人从哪里来？', '如何让收到私信的人不反感？', '朋友圈转发效果不明显时怎么办？'],
     v2Changes: '新增了"先找 5 位愿意一起转发的人"的具体动作，提供了 3 种私信话术模板，补充了"如何筛选高影响力转发者"的方法',
     v2Summary: 'v2：从冷启动策略到具体话术，可复制性大幅提升',
+    phase: '收集反馈',
+    progress: 72,
+    participantCount: 6,
+    deadline: '7 月 27 日',
+    neededRole: '做过校园活动冷启动的人',
+    visibility: '公开摘要',
   },
   {
     id: 'cc-2',
@@ -61,6 +143,12 @@ export const coCreatingItems: CoCreatingItem[] = [
     feedback: ['怎么判断一个项目该不该放？', '如果删完只剩很少的内容怎么办？', '不同行业的作品集标准一样吗？'],
     v2Changes: '新增了"三问判断法"：这个项目展示了我的思考吗？这个项目跟我想做的方向相关吗？如果我是面试官，我会因为这个项目想聊下去吗？',
     v2Summary: 'v2：从"删了什么"进化到"为什么删 + 怎么判断"，提供了可迁移的决策框架',
+    phase: '试用中',
+    progress: 48,
+    participantCount: 4,
+    deadline: '7 月 29 日',
+    neededRole: '正在准备作品集的学生或转行者',
+    visibility: '共创者可见',
   },
   {
     id: 'cc-3',
@@ -69,6 +157,12 @@ export const coCreatingItems: CoCreatingItem[] = [
     feedback: ['第一次分享选择什么主题？', '如果分享后反馈很差怎么办？', '怎么找到愿意听的人？'],
     v2Changes: '补充了"从你最近踩过的坑开始"的主题选择法，增加了"先发给 3 个信任的人看"的安全试水策略',
     v2Summary: 'v2：从心理建设延伸到具体的第一步行动路线',
+    phase: '形成 v2',
+    progress: 88,
+    participantCount: 8,
+    deadline: '7 月 25 日',
+    neededRole: '完成过第一次公开分享的人',
+    visibility: '公开摘要',
   },
 ];
 
