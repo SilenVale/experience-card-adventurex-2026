@@ -175,19 +175,19 @@ export default function XiaohongshuPublishModal({
 
   return (
     <>
-      <div className="fixed inset-0 z-[100] bg-[#1A1514]/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm" onClick={onClose} />
       <div className="fixed inset-0 z-[101] overflow-y-auto px-4 py-6 md:py-10">
-        <div className="mx-auto w-full max-w-5xl rounded-[28px] border border-black/5 bg-[#FAF7F3] shadow-2xl">
-          <div className="flex items-center justify-between border-b border-black/5 px-5 py-4 md:px-7">
+        <div className="mx-auto w-full max-w-5xl rounded-[28px] border border-theme-border bg-theme-bg-card shadow-2xl">
+          <div className="flex items-center justify-between border-b border-theme-border px-5 py-4 md:px-7">
             <div>
               <span className="text-[10px] font-semibold tracking-[0.16em] text-[#E63B30]">
                 BUILD IN PUBLIC
               </span>
-              <h2 className="mt-1 font-heading text-lg font-bold text-[#1A1514]">生成小红书构建记录</h2>
+              <h2 className="mt-1 font-heading text-lg font-bold text-theme-text">生成小红书构建记录</h2>
             </div>
             <button
               onClick={onClose}
-              className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-black/10 text-[#6B5B55] transition-colors hover:bg-white"
+              className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-theme-border text-theme-text-secondary transition-colors hover:bg-theme-bg-card-alt"
               aria-label="关闭小红书发布助手"
             >
               <i className="ri-close-line text-lg" />
@@ -226,7 +226,7 @@ export default function XiaohongshuPublishModal({
               </div>
               <button
                 onClick={downloadPoster}
-                className="mt-3 flex w-full cursor-pointer items-center justify-center gap-2 rounded-full border border-black/10 py-2.5 text-xs font-semibold text-[#1A1514] transition-colors hover:bg-white"
+                className="mt-3 flex w-full cursor-pointer items-center justify-center gap-2 rounded-full border border-theme-border py-2.5 text-xs font-semibold text-theme-text transition-colors hover:bg-theme-bg-card-alt"
               >
                 <i className="ri-download-2-line" />
                 下载 3:4 构建海报
@@ -244,7 +244,7 @@ export default function XiaohongshuPublishModal({
                       className={`w-full cursor-pointer rounded-xl border px-4 py-3 text-left text-sm transition-all ${
                         selectedTitle === index
                           ? 'border-[#E63B30]/30 bg-[#E63B30]/5 text-[#1A1514]'
-                          : 'border-black/5 bg-white/60 text-[#6B5B55] hover:border-black/10'
+                          : 'border-theme-border bg-theme-bg-card-alt text-theme-text-secondary hover:border-theme-accent/30'
                       }`}
                     >
                       {title}
@@ -259,7 +259,7 @@ export default function XiaohongshuPublishModal({
                   <span className="text-[10px] text-[#8C7A74]">已自动隐藏核心实现细节</span>
                 </div>
                 <div
-                  className="max-h-52 overflow-y-auto rounded-xl border border-black/5 bg-white/70 p-4 text-xs leading-6 text-[#6B5B55] whitespace-pre-line"
+                  className="max-h-52 overflow-y-auto rounded-xl border border-theme-border bg-theme-bg-card-alt p-4 text-xs leading-6 text-theme-text-secondary whitespace-pre-line"
                   aria-live="polite"
                 >
                   {visiblePostBody}
@@ -285,7 +285,7 @@ export default function XiaohongshuPublishModal({
                     value={noteUrl}
                     onChange={(event) => setNoteUrl(event.target.value)}
                     placeholder="粘贴小红书笔记链接"
-                    className="min-w-0 flex-1 rounded-full border border-black/10 bg-white px-4 py-2.5 text-xs text-[#1A1514] outline-none focus:border-[#E63B30]/40"
+                    className="min-w-0 flex-1 rounded-full border border-theme-border bg-theme-bg-card-alt px-4 py-2.5 text-xs text-theme-text outline-none focus:border-theme-accent/40"
                   />
                   <button
                     onClick={bindNote}

@@ -4,6 +4,7 @@ import Navbar from '@/components/feature/Navbar';
 import CommunityOverview from './components/CommunityOverview';
 import BuildPublicTimeline from './components/BuildPublicTimeline';
 import XiaohongshuPublishModal from './components/XiaohongshuPublishModal';
+import TrialDrawer from '@/components/feature/TrialDrawer';
 import {
   communityTabs,
   coCreatingItems,
@@ -17,10 +18,17 @@ export default function CommunityPage() {
   const [activeTab, setActiveTab] = useState('cocreating');
   const [publisherOpen, setPublisherOpen] = useState(false);
   const [publisherProjectTitle, setPublisherProjectTitle] = useState('零预算办校园活动');
+  const [trialOpen, setTrialOpen] = useState(false);
+  const [trialCard, setTrialCard] = useState({ id: 'persona-01', title: '零预算办校园活动' });
 
   const openPublisher = (projectTitle: string) => {
     setPublisherProjectTitle(projectTitle);
     setPublisherOpen(true);
+  };
+
+  const openTrial = (title: string, id = 'persona-01') => {
+    setTrialCard({ title, id });
+    setTrialOpen(true);
   };
 
   return (
@@ -98,7 +106,7 @@ export default function CommunityPage() {
               <div className="space-y-6">
                 <CommunityOverview
                   onOpenPublisher={openPublisher}
-                  onJoinTask={() => navigate('/')}
+                  onJoinTask={() => openTrial('零预算办校园活动')}
                 />
                 {coCreatingItems.map((item) => (
                   <article
@@ -160,7 +168,7 @@ export default function CommunityPage() {
 
                     <div className="mt-4 flex flex-col gap-2 border-t border-dashed border-theme-border pt-4 sm:flex-row sm:justify-end">
                       <button
-                        onClick={() => navigate('/')}
+                        onClick={() => openTrial(item.title, item.id === 'cc-2' ? 'persona-05' : item.id === 'cc-3' ? 'personal-01' : 'persona-01')}
                         className="rounded-full border border-theme-text/10 px-4 py-2 text-xs font-semibold text-theme-text transition-colors hover:bg-theme-bg-card-alt"
                       >
                         参与这次试用
@@ -195,7 +203,7 @@ export default function CommunityPage() {
                     </div>
                     <p className="mb-3 text-xs leading-relaxed text-theme-text-secondary">{item.message}</p>
                     <p className="mb-3 text-[10px] text-theme-gold-dark/60">{item.seekingContext}</p>
-                    <button onClick={() => navigate('/')} className="rounded-full bg-theme-accent px-4 py-1.5 text-xs font-medium text-white hover:bg-theme-accent-hover">
+                    <button onClick={() => openTrial(item.cardTitle, item.id === 'st-2' ? 'persona-02' : 'persona-05')} className="rounded-full bg-theme-accent px-4 py-1.5 text-xs font-medium text-white hover:bg-theme-accent-hover">
                       我正在遇到类似问题
                     </button>
                   </article>
@@ -248,6 +256,7 @@ export default function CommunityPage() {
         projectTitle={publisherProjectTitle}
         onClose={() => setPublisherOpen(false)}
       />
+      <TrialDrawer isOpen={trialOpen} onClose={() => setTrialOpen(false)} cardTitle={trialCard.title} cardId={trialCard.id} />
     </div>
   );
 }

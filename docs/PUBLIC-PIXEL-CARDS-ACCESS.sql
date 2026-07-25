@@ -1,0 +1,47 @@
+-- 只读设计稿：本轮不执行 Cloud SQL。
+-- 目标：匿名只能拿到公开像素成片 URL，不能读取 profiles 其他字段。
+
+-- 方案 A（推荐，最小改动）：SECURITY DEFINER RPC。
+-- 函数只返回一个 text，不暴露 profiles 行；默认拒绝表和函数的匿名直读。
+-- 这里以 compact user id 作为现有二维码标识，只有已有 pixel_card_url 的记录才公开。
+-- create or replace function public.get_public_pixel_card_url(p_compact_card_id text)
+-- returns text
+-- language sql
+-- stable
+-- security definer
+-- set search_path = public
+-- as $$
+--   select p.pixel_card_url
+--   from public.profiles p
+--   where replace(p.id::text, '-', '') = lower(p_compact_card_id)
+--     and nullif(btrim(p.pixel_card_url), '') is not null;
+-- $$;
+-- revoke all on function public.get_public_pixel_card_url(text) from public;
+-- grant execute on function public.get_public_pixel_card_url(text) to anon, authenticated;
+-- revoke select on public.profiles from anon;
+
+-- 方案 B（更强隔离，但增加表和同步链路）：独立公开映射表。
+-- create table public.public_pixel_cards (
+--   compact_card_id text primary key check (compact_card_id ~ '^[a-f0-9]{32}$'),
+--   user_id uuid not null references auth.users(id) on delete cascade,
+--   pixel_card_url text not null,
+--   updated_at timestamptz not null default now()
+-- );
+-- alter table public.public_pixel_cards enable row level security;
+-- create policy public_pixel_cards_anon_read on public.public_pixel_cards
+--   for select to anon using (true);
+-- create policy public_pixel_cards_owner_write on public.public_pixel_cards
+--   for all to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id);
+-- revoke all on public.public_pixel_cards from anon;
+-- grant select on public.public_pixel_cards to anon;
+-- grant select, insert, update, delete on public.public_pixel_cards to authenticated;
+
+-- 推荐 A 的原因：只新增一个函数，不新增表、同步写入和回填任务；RPC 返回单个 URL，
+-- 不会让匿名用户读取 display_name、avatar_url 或其他 profile 字段。若未来需要严格区分
+-- “已生成但未公开”的像素卡，则升级到 B，并让创建/更新流程显式写入映射表。
+
+-- 旧卡兼容：旧的固定路径不会自动进入公开 RPC；只有 profiles.pixel_card_url 已存在的卡可读取。
+-- 需要重新生成的旧卡由作者重新生成，写入版本化 URL 后即可恢复二维码下载。
+-- 上线顺序：部署函数 SQL → revoke/grant 核验 → 用匿名请求只读 RPC → 部署 Functions →
+-- 用新生成卡测试二维码、普通图片页和 download=1 → 再处理旧卡。
+-- 回滚：revoke execute on function ... from anon, authenticated；删除函数即可，不删除图片。

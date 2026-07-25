@@ -246,6 +246,7 @@ export default function PixelPortraitPage() {
   const compositeRef = useRef(document.createElement('canvas'));
   const cutoutRef = useRef(document.createElement('canvas'));
   const segmenterRef = useRef<SegmenterInstance | null>(null);
+  const autoStartCameraRef = useRef(false);
   const streamRef = useRef<MediaStream | null>(null);
   const animationRef = useRef(0);
   const segmentingRef = useRef(false);
@@ -275,6 +276,7 @@ export default function PixelPortraitPage() {
   const [downloadUrl, setDownloadUrl] = useState('');
   const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState<PixelSettings>(settingsRef.current);
+  const [frameColor, setFrameColor] = useState('#f6f3ed');
 
   const latestCard = useMemo(
     () => cards.find((card) => card.status === 'published') ?? cards[0] ?? null,
@@ -311,10 +313,6 @@ export default function PixelPortraitPage() {
     if (videoRef.current) videoRef.current.srcObject = null;
     setRunning(false);
     setStatus('镜头已关闭');
-    if (segmenterRef.current) {
-      await segmenterRef.current.close().catch(() => undefined);
-      segmenterRef.current = null;
-    }
   }, []);
 
   const renderLoop = useCallback((now: number) => {
@@ -343,34 +341,37 @@ export default function PixelPortraitPage() {
     setStatus('正在开启镜头与本地抠图…');
     try {
       await stopCamera();
-      const Segmenter = await loadSelfieSegmentation();
-      const segmenter = new Segmenter({
-        locateFile: (file) => `/mediapipe/selfie_segmentation/${file}`,
-      });
-      segmenter.setOptions({ modelSelection: 1, selfieMode: false });
-      segmenter.onResults((results: SegmentationResults) => {
-        const size = 256;
-        const composite = compositeRef.current;
-        const cutout = cutoutRef.current;
-        composite.width = composite.height = size;
-        cutout.width = cutout.height = size;
-        const compositeContext = composite.getContext('2d');
-        const cutoutContext = cutout.getContext('2d');
-        const portrait = portraitCanvasRef.current;
-        if (!compositeContext || !cutoutContext || !portrait) return;
+      let segmenter = segmenterRef.current;
+      if (!segmenter) {
+        const Segmenter = await loadSelfieSegmentation();
+        segmenter = new Segmenter({
+          locateFile: (file) => `/mediapipe/selfie_segmentation/${file}`,
+        });
+        segmenter.setOptions({ modelSelection: 1, selfieMode: false });
+        segmenter.onResults((results: SegmentationResults) => {
+          const size = 256;
+          const composite = compositeRef.current;
+          const cutout = cutoutRef.current;
+          composite.width = composite.height = size;
+          cutout.width = cutout.height = size;
+          const compositeContext = composite.getContext('2d');
+          const cutoutContext = cutout.getContext('2d');
+          const portrait = portraitCanvasRef.current;
+          if (!compositeContext || !cutoutContext || !portrait) return;
 
-        cutoutContext.clearRect(0, 0, size, size);
-        drawCover(results.image, cutoutContext, size, size);
-        cutoutContext.globalCompositeOperation = 'destination-in';
-        drawCover(results.segmentationMask, cutoutContext, size, size);
-        cutoutContext.globalCompositeOperation = 'source-over';
-        compositeContext.fillStyle = '#fff';
-        compositeContext.fillRect(0, 0, size, size);
-        compositeContext.drawImage(cutout, 0, 0, size, size);
-        drawPixelPortrait(composite, portrait, settingsRef.current, Date.now());
-      });
-      await segmenter.initialize();
-      segmenterRef.current = segmenter;
+          cutoutContext.clearRect(0, 0, size, size);
+          drawCover(results.image, cutoutContext, size, size);
+          cutoutContext.globalCompositeOperation = 'destination-in';
+          drawCover(results.segmentationMask, cutoutContext, size, size);
+          cutoutContext.globalCompositeOperation = 'source-over';
+          compositeContext.fillStyle = '#fff';
+          compositeContext.fillRect(0, 0, size, size);
+          compositeContext.drawImage(cutout, 0, 0, size, size);
+          drawPixelPortrait(composite, portrait, settingsRef.current, Date.now());
+        });
+        await segmenter.initialize();
+        segmenterRef.current = segmenter;
+      }
 
       const constraints = {
         video: deviceId
@@ -411,8 +412,15 @@ export default function PixelPortraitPage() {
       window.cancelAnimationFrame(animationRef.current);
       streamRef.current?.getTracks().forEach((track) => track.stop());
       segmenterRef.current?.close().catch(() => undefined);
+      segmenterRef.current = null;
     };
   }, [refreshCameras]);
+
+  useEffect(() => {
+    if (phase !== 'capture' || !autoStartCameraRef.current) return;
+    autoStartCameraRef.current = false;
+    void startCamera();
+  }, [phase, startCamera]);
 
   useEffect(() => {
     if (!user) return;
@@ -453,7 +461,7 @@ export default function PixelPortraitPage() {
     const height = 900;
     canvas.width = width;
     canvas.height = height;
-    context.fillStyle = '#f1eee8';
+    context.fillStyle = frameColor;
     context.fillRect(0, 0, width, height);
     context.fillStyle = '#0a0a0c';
     context.fillRect(0, 0, width, 167);
@@ -468,8 +476,11 @@ export default function PixelPortraitPage() {
     context.fillStyle = '#f1eee8';
     context.font = '700 28px sans-serif';
     context.fillText('EXPERIENCE CARD / PIXEL PORTRAIT', 177, 99);
-    context.fillStyle = '#fff';
+    context.fillStyle = frameColor;
     context.fillRect(64, 212, 620, 620);
+    context.strokeStyle = frameColor === '#0b0b0d' ? '#f6f3ed' : '#242426';
+    context.lineWidth = 8;
+    context.strokeRect(64, 212, 620, 620);
     context.imageSmoothingEnabled = false;
     context.drawImage(avatar, 64, 212, 620, 620);
     context.fillStyle = '#ee3029';
@@ -503,7 +514,7 @@ export default function PixelPortraitPage() {
 
     if (officialQrRef.current) drawQr(officialQrRef.current, OFFICIAL_WEBSITE_URL, 132);
     if (downloadQrRef.current) drawQr(downloadQrRef.current, targetDownloadUrl, 132);
-  }, [keywords, profileContent]);
+  }, [frameColor, keywords, profileContent]);
 
   const generateCard = async () => {
     if (!user || !session?.access_token) {
@@ -520,7 +531,8 @@ export default function PixelPortraitPage() {
     setError(false);
     setStatus('正在生成并保存你的像素经验名片…');
     const cardId = user.id.replaceAll('-', '');
-    const nextDownloadUrl = `${OFFICIAL_WEBSITE_URL.replace(/\/$/, '')}/download/${cardId}`;
+    // The QR points to a download response so a phone can save the PNG directly.
+    const nextDownloadUrl = `${OFFICIAL_WEBSITE_URL.replace(/\/$/, '')}/download/${cardId}?download=1`;
     setDownloadUrl(nextDownloadUrl);
     drawExperienceCard(nextDownloadUrl);
 
@@ -551,8 +563,12 @@ export default function PixelPortraitPage() {
   };
 
   const retake = () => {
+    setAvatarDataUrl('');
+    setCardDataUrl('');
+    setDownloadUrl('');
+    autoStartCameraRef.current = true;
     setPhase('capture');
-    setStatus('已回到拍摄页，请重新开启镜头');
+    setStatus('正在重新开启镜头…');
     setError(false);
   };
 
@@ -586,7 +602,7 @@ export default function PixelPortraitPage() {
                 <span>EXPERIENCE CARD</span>
                 <span>PIXEL PORTRAIT / 01</span>
               </div>
-              <div className="pixel-canvas-wrap">
+              <div className="pixel-canvas-wrap" style={{ '--pixel-frame-color': frameColor } as React.CSSProperties}>
                 <canvas ref={portraitCanvasRef} aria-label="实时像素人像预览" />
                 <video ref={videoRef} autoPlay muted playsInline aria-hidden="true" />
               </div>
@@ -638,6 +654,8 @@ export default function PixelPortraitPage() {
                   <span>镜像预览</span>
                   <input id="pixel-flip" type="checkbox" checked={settings.flip} onChange={(event) => setSettings((current) => ({ ...current, flip: event.target.checked }))} />
                 </label>
+                <label htmlFor="pixel-frame-color">头像边框颜色</label>
+                <div className="pixel-frame-picker"><input id="pixel-frame-color" type="color" value={frameColor} onChange={(event) => setFrameColor(event.target.value)} /><span>{frameColor === '#f6f3ed' ? '浅色（默认）' : '自定义边框'}</span></div>
               </section>
 
               <section className="pixel-tool-section pixel-capture-section">
@@ -657,7 +675,7 @@ export default function PixelPortraitPage() {
               <button type="button" className="pixel-button pixel-secondary" onClick={retake}>← 回去重新拍照</button>
             </header>
             <div className="pixel-edit-layout">
-              <div className="pixel-edit-portrait"><img src={avatarDataUrl} alt="刚才截取的像素头像" /></div>
+              <div className="pixel-edit-portrait" style={{ '--pixel-frame-color': frameColor } as React.CSSProperties}><img src={avatarDataUrl} alt="刚才截取的像素头像" /></div>
               <div className="pixel-keyword-form">
                 <p className="pixel-eyebrow">使用当前登录用户与最新经验卡内容</p>
                 <h2>{profileContent.title}</h2>
@@ -686,8 +704,8 @@ export default function PixelPortraitPage() {
             <div className="pixel-result-meta">
               <p>头像与成片已写入“我的名片”。原始摄像头画面没有上传。</p>
               <div className="pixel-result-codes">
-                <figure><canvas ref={officialQrRef} /><figcaption>打开 Experience Card 官网</figcaption></figure>
-                <figure><canvas ref={downloadQrRef} /><figcaption>打开这张名片的下载页</figcaption></figure>
+                <figure><canvas ref={officialQrRef} /><figcaption>扫码打开 Experience Card 官网</figcaption></figure>
+                <figure><canvas ref={downloadQrRef} /><figcaption>扫码直接下载这张经验现场头像</figcaption></figure>
               </div>
             </div>
             <div className="pixel-result-actions">

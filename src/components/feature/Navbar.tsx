@@ -6,7 +6,6 @@ import LoginModal from './LoginModal';
 const navTabs = [
   { id: 'square', label: '经验广场', path: '/' },
   { id: 'create', label: '创建经验卡', path: '/create' },
-  { id: 'pixel', label: '生成像素头像', path: '/pixel-portrait' },
   { id: 'community', label: '社区共创', path: '/community' },
 ];
 
@@ -23,7 +22,6 @@ export default function Navbar() {
   const getActiveTab = () => {
     const path = location.pathname;
     if (path === '/community') return 'community';
-    if (path === '/pixel-portrait') return 'pixel';
     if (path === '/create') return 'create';
     return 'square';
   };
@@ -88,10 +86,10 @@ export default function Navbar() {
                     onClick={() => handleTabClick(tab)}
                     className={`px-4 py-1.5 rounded-full text-sm font-heading font-medium transition-all duration-200 cursor-pointer whitespace-nowrap ${
                       activeTab === tab.id
-                        ? tab.id === 'create' || tab.id === 'pixel'
+                          ? tab.id === 'create'
                           ? 'bg-theme-accent text-white'
                           : 'bg-theme-bg-card-alt text-theme-text'
-                        : tab.id === 'create' || tab.id === 'pixel'
+                        : tab.id === 'create'
                           ? 'text-theme-accent hover:text-theme-accent-hover'
                           : 'text-theme-text-secondary hover:text-theme-text'
                     }`}
@@ -237,10 +235,10 @@ export default function Navbar() {
                   onClick={() => handleTabClick(tab)}
                   className={`px-4 py-2 rounded-full text-sm font-heading font-medium transition-all cursor-pointer whitespace-nowrap text-left ${
                     activeTab === tab.id
-                      ? tab.id === 'create' || tab.id === 'pixel'
+                      ? tab.id === 'create'
                         ? 'bg-theme-accent text-white'
                         : 'bg-theme-bg-card-alt text-theme-text'
-                      : tab.id === 'create' || tab.id === 'pixel'
+                      : tab.id === 'create'
                         ? 'text-theme-accent'
                         : 'text-theme-text-secondary hover:text-theme-text'
                   }`}

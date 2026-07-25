@@ -7,12 +7,13 @@ import {
   type ExperienceCardRecord,
   type TrialFeedbackRecord,
 } from '@/lib/experienceCards';
-import { getMyProfile, type ProfileRecord } from '@/lib/profiles';
+import { getMyProfile, updateMyProfileName, uploadProfileAvatar, type ProfileRecord } from '@/lib/profiles';
 import FadeContent from '@/components/effects/FadeContent';
 import Navbar from '@/components/feature/Navbar';
 import LoginModal from '@/components/feature/LoginModal';
 
 const PROFILE_BIO = '把做成过、踩过坑的真实经历，整理成别人今天就能试一步的经验。';
+const cacheKey = (userId: string) => `experience-card:my-cards:${userId}`;
 
 export default function MyCardsPage() {
   const navigate = useNavigate();
@@ -27,6 +28,11 @@ export default function MyCardsPage() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileTransitioning, setProfileTransitioning] = useState(false);
   const [leavingPage, setLeavingPage] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
+  const [savingName, setSavingName] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   const fetchCards = useCallback(async () => {
     if (!user) {
@@ -37,7 +43,17 @@ export default function MyCardsPage() {
       return;
     }
 
-    setLoading(true);
+    let hasCachedData = false;
+    try {
+      const cached = sessionStorage.getItem(cacheKey(user.id));
+      if (cached) {
+        const parsed = JSON.parse(cached) as { cards?: ExperienceCardRecord[]; profile?: ProfileRecord | null; feedback?: TrialFeedbackRecord[] };
+        if (parsed.cards && parsed.feedback && 'profile' in parsed) {
+          setCards(parsed.cards); setProfile(parsed.profile ?? null); setFeedback(parsed.feedback); hasCachedData = true;
+        }
+      }
+    } catch { /* stale cache never blocks a live request */ }
+    if (!hasCachedData) setLoading(true);
     setError(null);
 
     try {
@@ -47,7 +63,9 @@ export default function MyCardsPage() {
       ]);
       setCards(cardData);
       setProfile(profileData);
-      setFeedback(await listTrialFeedbackForCards(cardData.map((card) => card.id)));
+      const feedbackData = await listTrialFeedbackForCards(cardData.map((card) => card.id));
+      setFeedback(feedbackData);
+      try { sessionStorage.setItem(cacheKey(user.id), JSON.stringify({ cards: cardData, profile: profileData, feedback: feedbackData, updatedAt: Date.now() })); } catch { /* storage may be unavailable */ }
     } catch (fetchError) {
       setError(fetchError instanceof Error ? fetchError.message : '读取失败，请稍后重试');
     } finally {
@@ -58,6 +76,16 @@ export default function MyCardsPage() {
   useEffect(() => {
     fetchCards();
   }, [fetchCards]);
+
+  useEffect(() => {
+    const handleProfileUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<{ userId?: string }>).detail;
+      if (!user || detail?.userId !== user.id) return;
+      void fetchCards();
+    };
+    window.addEventListener('experience-card:profile-updated', handleProfileUpdated);
+    return () => window.removeEventListener('experience-card:profile-updated', handleProfileUpdated);
+  }, [fetchCards, user]);
 
   useEffect(() => {
     return () => {
@@ -72,6 +100,7 @@ export default function MyCardsPage() {
     user?.email?.split('@')[0] ||
     '经验分享者';
   const avatarFallback = displayName[0]?.toUpperCase() || 'E';
+  const profileAvatarUrl = profile?.pixel_avatar_url || profile?.avatar_url;
 
   const profileTags = useMemo(() => {
     const tags = ['真实经历'];
@@ -88,6 +117,46 @@ export default function MyCardsPage() {
       setProfileOpen(true);
       setProfileTransitioning(false);
     }, 360);
+  };
+
+  const startNameEdit = () => {
+    setNameDraft(displayName);
+    setEditingName(true);
+  };
+
+  const saveName = async () => {
+    if (!user || !nameDraft.trim()) return;
+    setSavingName(true);
+    try {
+      const nextProfile = await updateMyProfileName(user.id, nameDraft);
+      setProfile(nextProfile);
+      setEditingName(false);
+      try {
+        const cached = sessionStorage.getItem(cacheKey(user.id));
+        const parsed = cached ? JSON.parse(cached) : {};
+        sessionStorage.setItem(cacheKey(user.id), JSON.stringify({ ...parsed, profile: nextProfile, updatedAt: Date.now() }));
+      } catch { /* ignore unavailable storage */ }
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : '姓名保存失败');
+    } finally {
+      setSavingName(false);
+    }
+  };
+
+  const handleAvatarUpload = async (file: File | undefined) => {
+    if (!user || !file) return;
+    setUploadingAvatar(true);
+    setError(null);
+    try {
+      const avatarUrl = await uploadProfileAvatar(user.id, file);
+      setProfile((current) => current ? { ...current, avatar_url: avatarUrl } : current);
+      try { sessionStorage.removeItem(cacheKey(user.id)); } catch { /* ignore unavailable storage */ }
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : '头像上传失败');
+    } finally {
+      setUploadingAvatar(false);
+      if (avatarInputRef.current) avatarInputRef.current.value = '';
+    }
   };
 
   const leaveFor = (path: string) => {
@@ -154,7 +223,7 @@ export default function MyCardsPage() {
               <button
                 onClick={openProfile}
                 disabled={profileTransitioning}
-                className="group relative block w-full max-w-[760px] aspect-[1.48/1] md:aspect-[1.72/1] mx-auto text-left cursor-pointer disabled:cursor-wait"
+                className="profile-card-fly-in group relative block w-full max-w-[760px] aspect-[1.48/1] md:aspect-[1.72/1] mx-auto text-left cursor-pointer disabled:cursor-wait"
                 aria-label="打开个人经验名片"
               >
                 <span className="absolute inset-x-8 top-0 bottom-7 rounded-[30px] bg-[#e9ded1] border border-black/5 rotate-[-2.4deg] transition-transform duration-500 group-hover:rotate-[-3.2deg]" />
@@ -176,8 +245,8 @@ export default function MyCardsPage() {
                         </span>
                       </span>
                       <span className="w-14 h-14 md:w-20 md:h-20 rounded-2xl bg-theme-bg-card-alt border border-theme-border-accent overflow-hidden flex items-center justify-center">
-                        {profile?.avatar_url ? (
-                          <img src={profile.avatar_url} alt={`${displayName} 的头像`} className="w-full h-full object-cover" />
+                        {profileAvatarUrl ? (
+                          <img src={profileAvatarUrl} alt={`${displayName} 的头像`} className="w-full h-full object-cover" />
                         ) : (
                           <span className="font-heading font-black text-xl md:text-2xl text-theme-accent">{avatarFallback}</span>
                         )}
@@ -220,8 +289,8 @@ export default function MyCardsPage() {
                   <div className="relative flex flex-col md:flex-row md:items-center gap-5">
                     <div className="relative flex-shrink-0">
                       <div className="w-24 h-24 rounded-[24px] bg-theme-bg-card-alt border border-theme-border-accent overflow-hidden flex items-center justify-center">
-                        {profile?.avatar_url ? (
-                          <img src={profile.avatar_url} alt={`${displayName} 的头像`} className="w-full h-full object-cover" />
+                        {profileAvatarUrl ? (
+                          <img src={profileAvatarUrl} alt={`${displayName} 的头像`} className="w-full h-full object-cover" />
                         ) : (
                           <span className="font-heading font-black text-3xl text-theme-accent">{avatarFallback}</span>
                         )}
@@ -231,7 +300,18 @@ export default function MyCardsPage() {
 
                     <div className="min-w-0 flex-1">
                       <p className="mono-label text-theme-accent mb-1.5">PERSONAL CARD / OPEN</p>
-                      <h1 className={`font-heading font-black ${themeText} text-2xl md:text-3xl tracking-tight`}>{displayName}</h1>
+                      <div className="flex items-center gap-2">
+                        {editingName ? (
+                          <input value={nameDraft} onChange={(event) => setNameDraft(event.target.value)} maxLength={30} className={`w-48 rounded-lg border ${themeBorderAccent} bg-theme-bg-card-alt px-2.5 py-1.5 text-lg font-bold ${themeText} outline-none`} aria-label="修改姓名" />
+                        ) : (
+                          <h1 className={`font-heading font-black ${themeText} text-2xl md:text-3xl tracking-tight`}>{displayName}</h1>
+                        )}
+                        {editingName ? (
+                          <button onClick={() => void saveName()} disabled={savingName || !nameDraft.trim()} className="text-xs font-semibold text-theme-accent disabled:opacity-40">{savingName ? '保存中' : '保存'}</button>
+                        ) : (
+                          <button onClick={startNameEdit} className={`text-xs ${themeTextMuted} hover:text-theme-accent`} aria-label="修改姓名">修改姓名</button>
+                        )}
+                      </div>
                       <p className={`text-sm ${themeTextSec} leading-relaxed mt-2 max-w-2xl`}>{PROFILE_BIO}</p>
                       <div className="flex flex-wrap gap-2 mt-4">
                         {profileTags.map((tag) => (
@@ -248,19 +328,21 @@ export default function MyCardsPage() {
                   </div>
 
                   <div className={`relative grid sm:grid-cols-2 gap-2 mt-6 pt-5 border-t ${themeBorder}`}>
+                    <input ref={avatarInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => void handleAvatarUpload(event.target.files?.[0])} />
                     <button
-                      disabled
-                      className="flex items-center justify-between rounded-2xl border border-theme-border bg-theme-bg-card-alt px-4 py-3 text-left opacity-70 cursor-not-allowed"
-                      title="当前项目尚未配置头像存储桶"
+                      type="button"
+                      onClick={() => avatarInputRef.current?.click()}
+                      disabled={uploadingAvatar}
+                      className="flex items-center justify-between rounded-2xl border border-theme-border bg-theme-bg-card-alt px-4 py-3 text-left transition-all hover:-translate-y-0.5 hover:border-theme-accent disabled:cursor-wait disabled:opacity-70"
                     >
                       <span className="flex items-center gap-3">
                         <i className="ri-image-add-line text-theme-accent" />
                         <span>
                           <span className={`block text-xs font-semibold ${themeText}`}>从相册导入</span>
-                          <span className={`block text-[10px] ${themeTextMuted} mt-0.5`}>待头像存储接入</span>
+                          <span className={`block text-[10px] ${themeTextMuted} mt-0.5`}>{uploadingAvatar ? '正在上传…' : 'JPG / PNG / WebP，最大 5MB'}</span>
                         </span>
                       </span>
-                      <span className="tag-ivory text-[9px] px-2 py-0.5 rounded-full">预留</span>
+                      <span className="tag-ivory text-[9px] px-2 py-0.5 rounded-full">导入</span>
                     </button>
                     <button
                       onClick={() => leaveFor('/pixel-portrait')}
@@ -361,6 +443,12 @@ export default function MyCardsPage() {
                                   </span>
                                 </span>
                               </span>
+                            </button>
+                            <button
+                              onClick={() => leaveFor(`/create?versionOf=${card.id}`)}
+                              className="ml-2 inline-flex items-center gap-1 text-[10px] font-semibold text-theme-accent hover:underline"
+                            >
+                              <i className="ri-git-branch-line" /> 创建新版本
                             </button>
                             <FeedbackPanel items={cardFeedback} />
                           </article>

@@ -32,7 +32,7 @@ export async function runDifyWorkflow({
   if (!difyApiKey) throw new Error('DIFY_NOT_CONFIGURED');
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 30_000);
+  const timeout = setTimeout(() => controller.abort(), 60_000);
 
   try {
     const response = await fetch(`${difyBaseUrl}/workflows/run`, {

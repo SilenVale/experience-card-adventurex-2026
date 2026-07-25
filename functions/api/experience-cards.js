@@ -13,8 +13,9 @@ export async function onRequestPost({ request, env }) {
     const keywords = Array.isArray(body.keywords)
       ? body.keywords.filter((keyword) => typeof keyword === 'string').slice(0, 6)
       : [];
-    const avatarPath = `${user.id}/avatars/pixel-avatar.png`;
-    const cardPath = `${user.id}/cards/${id}.png`;
+    const version = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
+    const avatarPath = `${user.id}/avatars/pixel-avatar-${version}.png`;
+    const cardPath = `${user.id}/cards/${id}-${version}.png`;
     const avatarUrl = await uploadPng(config, token, avatarPath, decodePng(body.avatarData));
     const cardUrl = await uploadPng(config, token, cardPath, decodePng(body.imageData));
     const profileResponse = await fetch(`${config.url}/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}`, {
@@ -25,11 +26,11 @@ export async function onRequestPost({ request, env }) {
         'content-type': 'application/json',
         Prefer: 'return=minimal',
       },
-      body: JSON.stringify({ avatar_url: avatarUrl, pixel_keywords: keywords, pixel_card_url: cardUrl, pixel_card_id: id }),
+      body: JSON.stringify({ pixel_avatar_url: avatarUrl, pixel_keywords: keywords, pixel_card_url: cardUrl, pixel_card_id: id }),
     });
     if (!profileResponse.ok) throw new Error(`Profile update failed (${profileResponse.status})`);
     return json({ id, avatarUrl, cardUrl, downloadUrl: `/download/${id}` }, 201);
   } catch (error) {
-    return json({ error: error instanceof Error ? error.message : 'Unable to save pixel profile' }, 400);
+    return json({ error: error instanceof Error ? error.message : 'Unable to save pixel profile' }, 500);
   }
 }

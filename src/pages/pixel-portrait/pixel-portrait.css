@@ -75,7 +75,25 @@
   aspect-ratio: 1;
   background: #fff;
   image-rendering: pixelated;
+  border: 8px solid var(--pixel-frame-color, #f6f3ed);
   box-shadow: 0 0 0 1px #242426, 18px 18px 0 rgba(237, 66, 50, 0.72);
+}
+
+.pixel-frame-picker {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #aba7a0;
+  font-size: 12px;
+}
+
+.pixel-frame-picker input {
+  width: 42px;
+  height: 32px;
+  padding: 2px;
+  border: 1px solid #414145;
+  background: #1b1b1e;
+  cursor: pointer;
 }
 
 .pixel-canvas-wrap video {
@@ -341,6 +359,7 @@
   display: block;
   background: #fff;
   image-rendering: pixelated;
+  border: 8px solid var(--pixel-frame-color, #f6f3ed);
   box-shadow: 16px 16px 0 #ed4232;
 }
 

@@ -6,6 +6,7 @@ interface CreateCardPreviewProps {
   result: string;
   boundary: string;
   pitfall: string;
+  microAction: string;
   stageLabel: string;
 }
 
@@ -17,6 +18,7 @@ export default function CreateCardPreview({
   result,
   boundary,
   pitfall,
+  microAction,
   stageLabel,
 }: CreateCardPreviewProps) {
   const actionItems = actions
@@ -45,17 +47,17 @@ export default function CreateCardPreview({
           </span>
         </div>
 
-        <div className="relative rotate-[-0.4deg] rounded-[15px] border border-theme-border bg-[#FFFCF8] px-7 py-6 shadow-sm">
+        <div className="relative rotate-[-0.4deg] rounded-[15px] border border-theme-border bg-theme-bg-card-alt px-7 py-6 shadow-sm">
           <div className="absolute bottom-5 left-2 top-5 flex flex-col justify-between">
             {[0, 1, 2, 3].map((hole) => (
-              <span key={hole} className="h-1.5 w-1.5 rounded-full bg-[#D9CDC1]" />
+              <span key={hole} className="h-1.5 w-1.5 rounded-full bg-theme-border" />
             ))}
           </div>
           <span className="text-[8px] font-semibold tracking-wider text-theme-accent">EXPERIENCE CARD</span>
-          <h2 className="mt-3 font-heading text-xl font-black leading-[1.02] tracking-[-0.05em] text-[#1A1514]">
+          <h2 className="mt-3 font-heading text-xl font-black leading-[1.02] tracking-[-0.05em] text-theme-text">
             {title || '我的经验名片（草稿）'}
           </h2>
-          <p className="mt-3 line-clamp-3 text-[10px] leading-relaxed text-[#6B5B55]">
+          <p className="mt-3 line-clamp-3 text-[10px] leading-relaxed text-theme-text-secondary">
             {oneLiner || problem || '完成追问后，这里会出现一句可以被别人理解的经验摘要。'}
           </p>
         </div>
@@ -75,7 +77,7 @@ export default function CreateCardPreview({
           </div>
         </div>
 
-        <div className="mt-2 rounded-[15px] border border-theme-border bg-[#FFFCF8] px-3 py-4">
+        <div className="mt-2 rounded-[15px] border border-theme-border bg-theme-bg-card-alt px-3 py-4">
           <div className="space-y-3">
             <div>
               <p className="text-[8px] font-semibold text-theme-accent">01 · 真正的问题</p>
@@ -107,6 +109,13 @@ export default function CreateCardPreview({
           <div className="mt-2 rounded-[14px] border border-theme-accent/10 bg-theme-accent-subtle px-3 py-2.5">
             <p className="text-[8px] font-semibold text-theme-accent">踩坑与调整</p>
             <p className="mt-1 line-clamp-2 text-[9px] text-theme-text-secondary">{pitfall}</p>
+          </div>
+        )}
+
+        {microAction && (
+          <div className="mt-2 rounded-[14px] border border-theme-gold-light bg-theme-gold-subtle px-3 py-2.5">
+            <p className="text-[8px] font-semibold text-theme-gold-dark">今天可以先试的一步</p>
+            <p className="mt-1 line-clamp-2 text-[9px] text-theme-text-secondary">{microAction}</p>
           </div>
         )}
       </div>

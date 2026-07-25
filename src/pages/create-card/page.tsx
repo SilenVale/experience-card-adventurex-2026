@@ -36,7 +36,105 @@ const emptyDraft = {
   result: '',
   boundary: '',
   suitableFor: '',
+  microAction: '',
 };
+
+const AUTOSAVE_PREFIX = 'experience-card-create-autosave';
+const LEGACY_AUTOSAVE_KEY = AUTOSAVE_PREFIX;
+const AUTOSAVE_ANONYMOUS_KEY = `${AUTOSAVE_PREFIX}:anonymous`;
+const AUTOSAVE_SCHEMA_VERSION = 1;
+const AUTOSAVE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const visibilityIds = new Set<Visibility>(['private', 'trial', 'public']);
+const inputModeIds = new Set<InputMode>(['write', 'xiaohongshu']);
+
+type AutosavePayload = {
+  schemaVersion: number;
+  ownerUserId: string | null;
+  updatedAt: string;
+  data: {
+    rawExperience: string;
+    answers: Record<number, string>;
+    draft: typeof emptyDraft;
+    sourceMap: Record<string, string[]>;
+    sharingConsent: boolean;
+    visibility: Visibility;
+    inputMode: InputMode;
+    step: 1 | 2 | 3;
+    currentQuestion: number;
+  };
+};
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function isStringRecord(value: unknown): value is Record<string, string> {
+  return isPlainObject(value) && Object.values(value).every((item) => typeof item === 'string');
+}
+
+function isSourceMap(value: unknown): value is Record<string, string[]> {
+  return isPlainObject(value) && Object.values(value).every((item) => Array.isArray(item) && item.every((source) => typeof source === 'string'));
+}
+
+function autosaveKey(userId: string | null) {
+  return userId ? `${AUTOSAVE_PREFIX}:${userId}` : AUTOSAVE_ANONYMOUS_KEY;
+}
+
+function readAutosave(storage: Storage, key: string, ownerUserId: string | null): AutosavePayload | null {
+  let raw: string | null = null;
+  try { raw = storage.getItem(key); } catch { return null; }
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<AutosavePayload>;
+    const updatedAt = typeof parsed.updatedAt === 'string' ? Date.parse(parsed.updatedAt) : NaN;
+    const data = parsed.data;
+    const draft = data && isPlainObject(data.draft) ? data.draft : null;
+    const validDraft = draft && Object.values(emptyDraft).every((_value, index) => {
+      const field = Object.keys(emptyDraft)[index];
+      return typeof draft[field] === 'string';
+    });
+    const validStep = data && (data.step === 1 || data.step === 2 || data.step === 3);
+    const valid = parsed.schemaVersion === AUTOSAVE_SCHEMA_VERSION
+      && parsed.ownerUserId === ownerUserId
+      && Number.isFinite(updatedAt)
+      && updatedAt <= Date.now()
+      && Date.now() - updatedAt <= AUTOSAVE_MAX_AGE_MS
+      && data && typeof data.rawExperience === 'string'
+      && isStringRecord(data.answers)
+      && validDraft
+      && isSourceMap(data.sourceMap)
+      && typeof data.sharingConsent === 'boolean'
+      && visibilityIds.has(data.visibility as Visibility)
+      && inputModeIds.has(data.inputMode as InputMode)
+      && validStep
+      && Number.isInteger(data.currentQuestion) && data.currentQuestion >= 0 && data.currentQuestion <= 4;
+    if (!valid) {
+      storage.removeItem(key);
+      return null;
+    }
+    return parsed as AutosavePayload;
+  } catch {
+    try { storage.removeItem(key); } catch { /* ignore unavailable storage */ }
+    return null;
+  }
+}
+
+function writeAutosave(storage: Storage, key: string, ownerUserId: string | null, data: AutosavePayload['data']) {
+  const payload: AutosavePayload = {
+    schemaVersion: AUTOSAVE_SCHEMA_VERSION,
+    ownerUserId,
+    updatedAt: new Date().toISOString(),
+    data,
+  };
+  try { storage.setItem(key, JSON.stringify(payload)); } catch { /* storage may be unavailable */ }
+}
+
+function clearAutosave(userId: string | null) {
+  try {
+    if (userId) localStorage.removeItem(autosaveKey(userId));
+    sessionStorage.removeItem(AUTOSAVE_ANONYMOUS_KEY);
+  } catch { /* storage may be unavailable */ }
+}
 
 const visibilityOptions: { id: Visibility; title: string; description: string; icon: string }[] = [
   { id: 'private', title: '私人草稿', description: '只保存在我的名片中，核心内容不公开。', icon: 'ri-lock-line' },
@@ -75,6 +173,7 @@ export default function CreateCardPage() {
   const location = useLocation();
   const { user, loading: authLoading } = useAuth();
   const draftId = new URLSearchParams(location.search).get('draft');
+  const versionOfId = new URLSearchParams(location.search).get('versionOf');
   const [step, setStep] = useState<CreateStep>(1);
   const [inputMode, setInputMode] = useState<InputMode>('write');
   const [rawExperience, setRawExperience] = useState('');
@@ -94,31 +193,105 @@ export default function CreateCardPage() {
   const [publisherOpen, setPublisherOpen] = useState(false);
   const [questionTransitioning, setQuestionTransitioning] = useState(false);
   const [editingCardId, setEditingCardId] = useState<string | null>(null);
-  const [loadingDraft, setLoadingDraft] = useState(Boolean(draftId));
+  const [loadingDraft, setLoadingDraft] = useState(Boolean(draftId || versionOfId));
+  const [autosaveReady, setAutosaveReady] = useState(false);
+  const autosaveStorageKey = authLoading ? null : autosaveKey(user?.id ?? null);
+  const authScopeRef = useRef<string | null | undefined>(undefined);
   const questionStageRef = useRef<HTMLDivElement>(null);
   const questionTweenRef = useRef<gsap.core.Tween | null>(null);
 
   useEffect(() => {
-    if (step === 'success') return;
-    try {
-      localStorage.setItem(
-        'experience-card-create-autosave',
-        JSON.stringify({ rawExperience, answers, draft, visibility, inputMode, updatedAt: new Date().toISOString() })
-      );
-    } catch {
-      // Current-session editing remains available when storage is unavailable.
+    if (authLoading) return;
+    const nextUserId = user?.id ?? null;
+    if (authScopeRef.current !== undefined && authScopeRef.current !== nextUserId) {
+      setRawExperience('');
+      setAnswers({});
+      setDraft(emptyDraft);
+      setSourceMap({});
+      setSharingConsent(false);
+      setEditingCardId(null);
+      setSavedCardId(null);
+      setSavedStatus(null);
+      setSaveError(null);
+      setStep(1);
+      setCurrentQuestion(0);
+      setVisibility('trial');
+      setInputMode('write');
+      setLoadingDraft(Boolean(draftId || versionOfId));
     }
-  }, [rawExperience, answers, draft, visibility, inputMode, step]);
+    authScopeRef.current = nextUserId;
+  }, [authLoading, user?.id, draftId, versionOfId]);
 
   useEffect(() => {
-    if (!draftId) {
+    setAutosaveReady(false);
+    if (authLoading) return;
+    if (draftId || versionOfId || !autosaveStorageKey) {
+      setAutosaveReady(true);
+      return;
+    }
+    try { localStorage.removeItem(LEGACY_AUTOSAVE_KEY); } catch { /* ignore unavailable storage */ }
+    // Never carry the previous auth identity's in-memory draft into a new storage scope.
+    setRawExperience('');
+    setAnswers({});
+    setDraft(emptyDraft);
+    setSourceMap({});
+    setSharingConsent(false);
+    setVisibility('trial');
+    setInputMode('write');
+    setStep(1);
+    setCurrentQuestion(0);
+    const ownerId = user?.id ?? null;
+    const storage = ownerId ? localStorage : sessionStorage;
+    let payload = readAutosave(storage, autosaveStorageKey, ownerId);
+    if (!payload && ownerId) {
+      const anonymousPayload = readAutosave(sessionStorage, AUTOSAVE_ANONYMOUS_KEY, null);
+      if (anonymousPayload) {
+        payload = { ...anonymousPayload, ownerUserId: ownerId };
+        writeAutosave(localStorage, autosaveStorageKey, ownerId, anonymousPayload.data);
+        try { sessionStorage.removeItem(AUTOSAVE_ANONYMOUS_KEY); } catch { /* ignore unavailable storage */ }
+      }
+    }
+    if (payload) {
+      const data = payload.data;
+      setRawExperience(data.rawExperience);
+      setAnswers(data.answers);
+      setDraft(data.draft);
+      setSourceMap(data.sourceMap);
+      setSharingConsent(data.sharingConsent);
+      setVisibility(data.visibility);
+      setInputMode(data.inputMode);
+      setStep(data.step);
+      setCurrentQuestion(data.currentQuestion);
+    }
+    setAutosaveReady(true);
+  }, [authLoading, draftId, versionOfId, user?.id, autosaveStorageKey]);
+
+  useEffect(() => {
+    if (draftId || versionOfId || !autosaveReady || !autosaveStorageKey || step === 'success') return;
+    const ownerId = user?.id ?? null;
+    writeAutosave(ownerId ? localStorage : sessionStorage, autosaveStorageKey, ownerId, {
+      rawExperience,
+      answers,
+      draft,
+      sourceMap,
+      sharingConsent,
+      visibility,
+      inputMode,
+      step: step as 1 | 2 | 3,
+      currentQuestion,
+    });
+  }, [draftId, versionOfId, autosaveReady, autosaveStorageKey, user?.id, rawExperience, answers, draft, sourceMap, sharingConsent, visibility, inputMode, step, currentQuestion]);
+
+  useEffect(() => {
+    const sourceId = draftId || versionOfId;
+    if (!sourceId) {
       setLoadingDraft(false);
       return;
     }
     if (authLoading) return;
     if (!user) {
       setLoadingDraft(false);
-      setSaveError('登录后才能继续编辑草稿。');
+      setSaveError('登录后才能继续编辑或创建新版本。');
       return;
     }
 
@@ -127,12 +300,13 @@ export default function CreateCardPage() {
       setLoadingDraft(true);
       setSaveError(null);
       try {
-        const card = await getExperienceCard(draftId);
-        if (!card || card.user_id !== user.id || card.status !== 'draft') {
-          throw new Error('这张草稿不存在，或你没有编辑权限。');
+        const card = await getExperienceCard(sourceId);
+        if (!card || card.user_id !== user.id || (draftId && card.status !== 'draft')) {
+          throw new Error('这张经验卡不存在，或你没有编辑权限。');
         }
         if (!active) return;
-        setEditingCardId(card.id);
+        // Editing a draft updates it; “创建新版本” always saves a new row.
+        setEditingCardId(draftId ? card.id : null);
         setRawExperience(card.background);
         setAnswers({ 1: card.problem, 2: card.actions_done, 3: card.pitfall, 4: card.result, 5: card.boundary });
         setDraft({
@@ -144,10 +318,11 @@ export default function CreateCardPage() {
           result: card.result,
           suitableFor: card.suitable_for,
           boundary: card.boundary,
+          microAction: card.micro_action ?? '',
         });
         setSourceMap(card.source_map ?? {});
         setSharingConsent(Boolean(card.sharing_consent));
-        setVisibility('private');
+        setVisibility(versionOfId ? 'trial' : 'private');
         setStep(3);
       } catch (error) {
         if (active) setSaveError(error instanceof Error ? error.message : '读取草稿失败，请稍后重试。');
@@ -159,7 +334,7 @@ export default function CreateCardPage() {
     return () => {
       active = false;
     };
-  }, [draftId, user, authLoading]);
+  }, [draftId, versionOfId, user, authLoading]);
 
   useEffect(() => {
     return () => {
@@ -228,6 +403,7 @@ export default function CreateCardPage() {
       result: String(card.result ?? ''),
       suitableFor: String(card.suitable_for ?? ''),
       boundary: String(card.boundary ?? ''),
+      microAction: typeof card.micro_action === 'string' ? card.micro_action : '',
     });
     setSourceMap((card.source_map as Record<string, string[]>) ?? {});
     setStep(3);
@@ -265,6 +441,15 @@ export default function CreateCardPage() {
       return;
     }
 
+    if (visibility !== 'private' && !sharingConsent) {
+      setSaveError('公开或可试用经验卡前，必须确认你有权分享这段经历。');
+      return;
+    }
+    if (visibility !== 'private' && !draft.microAction.trim()) {
+      setSaveError('公开或可试用经验卡前，请补充“今天可以先试的一步”。');
+      return;
+    }
+
     setSaving(true);
     setSaveError(null);
     const status: CardStatus = visibility === 'private' ? 'draft' : 'published';
@@ -279,6 +464,7 @@ export default function CreateCardPage() {
       result: draft.result.trim(),
       suitableFor: draft.suitableFor.trim(),
       boundary: draft.boundary.trim(),
+      microAction: draft.microAction.trim() || null,
       sourceMap,
       sharingConsent,
       status,
@@ -289,6 +475,7 @@ export default function CreateCardPage() {
         : await saveExperienceCard(input);
       setSavedCardId(data.id);
       setSavedStatus(data.status);
+      clearAutosave(user?.id ?? null);
       setStep('success');
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : '保存失败，请稍后重试。');
@@ -308,6 +495,7 @@ export default function CreateCardPage() {
     pitfall: draft.pitfall || answers[3] || '',
     result: draft.result || answers[4] || '',
     boundary: draft.boundary || answers[5] || '',
+    microAction: draft.microAction,
     stageLabel,
   };
 
@@ -371,10 +559,10 @@ export default function CreateCardPage() {
           {step !== 'success' ? (
             <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
               <section className="ui-motion relative overflow-hidden rounded-[26px] border border-theme-border bg-theme-bg-card p-3 shadow-[0_24px_70px_rgba(89,52,43,0.07)] md:p-4">
-                <div className="relative overflow-hidden rounded-[20px] border border-theme-border bg-[#FFFCF8] px-6 py-7 shadow-sm md:px-10 md:py-9">
+                <div className="relative overflow-hidden rounded-[20px] border border-theme-border bg-theme-bg-card-alt px-6 py-7 shadow-sm md:px-10 md:py-9">
                   <div className="absolute bottom-8 left-3 top-8 flex flex-col justify-between">
                     {[0, 1, 2, 3, 4].map((hole) => (
-                      <span key={hole} className="h-2 w-2 rounded-full bg-[#D9CDC1]/80" />
+                      <span key={hole} className="h-2 w-2 rounded-full bg-theme-border" />
                     ))}
                   </div>
 
@@ -387,14 +575,14 @@ export default function CreateCardPage() {
                           </span>
                         </CreateFade>
                         <CreateFade delay={230}>
-                          <h1 className="mt-3 max-w-2xl font-heading text-2xl font-black leading-[1.05] tracking-[-0.045em] text-[#1A1514] md:text-4xl">
+                          <h1 className="mt-3 max-w-2xl font-heading text-2xl font-black leading-[1.05] tracking-[-0.045em] text-theme-text md:text-4xl">
                             把你做成过的一件事，
                             <br />
                             留给未来可能需要它的人。
                           </h1>
                         </CreateFade>
                         <CreateFade delay={270} blur={false}>
-                          <p className="mt-3 text-sm leading-relaxed text-[#6B5B55]">
+                          <p className="mt-3 text-sm leading-relaxed text-theme-text-secondary">
                             不需要完美，也不用展示全部。你决定分享什么，AI 只帮你说清楚。
                           </p>
                         </CreateFade>
@@ -567,12 +755,12 @@ export default function CreateCardPage() {
                           </span>
                         </CreateFade>
                         <CreateFade delay={80}>
-                          <h1 className="mt-2 font-heading text-2xl font-black tracking-[-0.04em] text-[#1A1514]">
+                          <h1 className="mt-2 font-heading text-2xl font-black tracking-[-0.04em] text-theme-text">
                             这张经验卡由你确认，不由 AI 决定。
                           </h1>
                         </CreateFade>
                         <CreateFade delay={120} blur={false}>
-                          <p className="mt-2 text-xs leading-relaxed text-[#6B5B55]">
+                          <p className="mt-2 text-xs leading-relaxed text-theme-text-secondary">
                             修改、删除或隐藏任何内容。只有你确认后，它才会成为可试用的 V1。
                           </p>
                         </CreateFade>
@@ -587,6 +775,7 @@ export default function CreateCardPage() {
                             { key: 'result', label: '04 · 最终发生了什么', rows: 3 },
                             { key: 'suitableFor', label: '05 · 这段经验适合谁', rows: 3 },
                             { key: 'boundary', label: '使用边界 / 不适合照搬的情况', rows: 3 },
+                            { key: 'microAction', label: '今天可以先试的一步（草稿可留空，公开或可试用时必填）', rows: 2 },
                           ].map((field, index) => (
                             <CreateFade key={field.key} delay={160 + index * 36}>
                               <label className="block">
@@ -604,6 +793,11 @@ export default function CreateCardPage() {
                                     onChange={(event) => setDraft((current) => ({ ...current, [field.key]: event.target.value }))}
                                     className="mt-1.5 w-full resize-none rounded-xl border border-theme-border bg-theme-bg-card-alt px-3.5 py-3 text-sm leading-relaxed text-theme-text outline-none focus:border-theme-accent/35"
                                   />
+                                )}
+                                {field.key === 'microAction' && !draft.microAction.trim() && (
+                                  <span className="mt-1 block text-[10px] leading-relaxed text-theme-text-muted">
+                                    旧版 AI 未返回时这里会留空，请由你确认后手动补充；不会自动生成模板内容。
+                                  </span>
                                 )}
                               </label>
                             </CreateFade>
@@ -699,17 +893,17 @@ export default function CreateCardPage() {
           ) : (
             <CreateFade className="mx-auto max-w-3xl" delay={80}>
               <section className="ui-motion rounded-[26px] border border-theme-border bg-theme-bg-card p-3 shadow-[0_24px_80px_rgba(89,52,43,0.08)]">
-                <div className="relative overflow-hidden rounded-[20px] border border-theme-border bg-[#FFFCF8] px-7 py-10 text-center md:px-12">
+                <div className="relative overflow-hidden rounded-[20px] border border-theme-border bg-theme-bg-card-alt px-7 py-10 text-center md:px-12">
                 <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-theme-accent/15 bg-theme-accent-subtle text-theme-accent">
                   <i className="ri-check-line text-2xl" />
                 </div>
                 <span className="mt-5 block text-[10px] font-semibold tracking-[0.14em] text-theme-accent">
                   EXPERIENCE CARD / V1
                 </span>
-                <h1 className="mt-2 font-heading text-2xl font-black tracking-[-0.04em] text-[#1A1514] md:text-4xl">
+                <h1 className="mt-2 font-heading text-2xl font-black tracking-[-0.04em] text-theme-text md:text-4xl">
                   你的经验卡已经被好好保存。
                 </h1>
-                <p className="mx-auto mt-3 max-w-lg text-sm leading-relaxed text-[#6B5B55]">
+                <p className="mx-auto mt-3 max-w-lg text-sm leading-relaxed text-theme-text-secondary">
                   {savedStatus === 'published'
                     ? '已经同步到云端，并出现在经验广场。'
                     : '已保存为仅作者可见的云端草稿。'}
