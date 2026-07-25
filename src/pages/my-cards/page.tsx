@@ -263,20 +263,47 @@ export default function MyCardsPage() {
                       <span className="tag-ivory text-[9px] px-2 py-0.5 rounded-full">预留</span>
                     </button>
                     <button
-                      disabled
-                      className="flex items-center justify-between rounded-2xl border border-theme-border bg-theme-bg-card-alt px-4 py-3 text-left opacity-70 cursor-not-allowed"
-                      title="等待朋友提供数码头像功能"
+                      onClick={() => leaveFor('/pixel-portrait')}
+                      className="flex items-center justify-between rounded-2xl border border-theme-border-accent bg-theme-bg-card-alt px-4 py-3 text-left cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:border-theme-accent"
                     >
                       <span className="flex items-center gap-3">
                         <i className="ri-camera-lens-line text-[#264a7c]" />
                         <span>
-                          <span className={`block text-xs font-semibold ${themeText}`}>生成数码头像</span>
-                          <span className={`block text-[10px] ${themeTextMuted} mt-0.5`}>朋友功能接入后开放</span>
+                          <span className={`block text-xs font-semibold ${themeText}`}>
+                            {profile?.avatar_url ? '重新生成像素头像' : '生成像素头像'}
+                          </span>
+                          <span className={`block text-[10px] ${themeTextMuted} mt-0.5`}>摄像头本地抠图 · 白底像素化</span>
                         </span>
                       </span>
-                      <span className="tag-ivory text-[9px] px-2 py-0.5 rounded-full">即将开放</span>
+                      <i className="ri-arrow-right-line text-theme-accent" />
                     </button>
                   </div>
+
+                  {profile?.pixel_card_url && (
+                    <div className={`relative mt-5 pt-5 border-t ${themeBorder}`}>
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                        <img
+                          src={profile.pixel_card_url}
+                          alt="我的像素经验名片"
+                          className="w-full sm:w-52 aspect-video object-cover rounded-xl border border-theme-border-accent"
+                        />
+                        <div className="min-w-0">
+                          <p className={`text-xs font-semibold ${themeText}`}>像素经验名片成片</p>
+                          <p className={`text-[10px] ${themeTextMuted} mt-1`}>
+                            {(profile.pixel_keywords ?? []).map((keyword) => `#${keyword}`).join(' ') || '尚未填写关键词'}
+                          </p>
+                          <a
+                            href={profile.pixel_card_url}
+                            download="experience-card-pixel-profile.png"
+                            className="inline-flex items-center gap-1 mt-3 text-xs font-semibold text-theme-accent hover:underline"
+                          >
+                            <i className="ri-download-2-line" />
+                            下载 PNG
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </section>
               </FadeContent>
 

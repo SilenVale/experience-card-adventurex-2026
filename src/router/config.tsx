@@ -6,6 +6,7 @@ import CreateCardPage from "../pages/create-card/page";
 import CommunityPage from "../pages/community/page";
 import MyCardsPage from "../pages/my-cards/page";
 import AuthCallbackPage from "../pages/auth-callback/page";
+import PixelPortraitPage from "../pages/pixel-portrait/page";
 
 const routes: RouteObject[] = [
   {
@@ -19,6 +20,10 @@ const routes: RouteObject[] = [
   {
     path: "/create",
     element: <CreateCardPage />,
+  },
+  {
+    path: "/pixel-portrait",
+    element: <PixelPortraitPage />,
   },
   {
     path: "/community",
