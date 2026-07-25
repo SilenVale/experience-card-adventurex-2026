@@ -16,6 +16,11 @@ export interface SavePixelProfileResult {
   downloadUrl: string;
 }
 
+function invalidateMyCardsCache(userId: string) {
+  try { sessionStorage.removeItem(`experience-card:my-cards:${userId}`); } catch { /* storage may be unavailable */ }
+  window.dispatchEvent(new CustomEvent('experience-card:profile-updated', { detail: { userId } }));
+}
+
 function dataUrlToBlob(dataUrl: string) {
   const [metadata, encoded] = dataUrl.split(',');
   if (!metadata?.startsWith('data:image/png;base64') || !encoded) {
@@ -31,8 +36,9 @@ function publicAssetUrl(path: string) {
 }
 
 async function saveDirectlyToSupabase(input: SavePixelProfileInput): Promise<SavePixelProfileResult> {
-  const avatarPath = `${input.userId}/avatars/pixel-avatar.png`;
-  const cardPath = `${input.userId}/cards/${input.cardId}.png`;
+  const version = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
+  const avatarPath = `${input.userId}/avatars/pixel-avatar-${version}.png`;
+  const cardPath = `${input.userId}/cards/${input.cardId}-${version}.png`;
 
   const [avatarUpload, cardUpload] = await Promise.all([
     supabase.storage
@@ -48,17 +54,25 @@ async function saveDirectlyToSupabase(input: SavePixelProfileInput): Promise<Sav
 
   const avatarUrl = publicAssetUrl(avatarPath);
   const cardUrl = publicAssetUrl(cardPath);
-  const { error } = await supabase
+  let { error } = await supabase
     .from('profiles')
     .update({
-      avatar_url: avatarUrl,
+      pixel_avatar_url: avatarUrl,
       pixel_keywords: input.keywords,
       pixel_card_url: cardUrl,
       pixel_card_id: input.cardId,
     })
     .eq('id', input.userId);
 
+  if (error && /pixel_avatar_url/.test(error.message)) {
+    const fallback = await supabase
+      .from('profiles')
+      .update({ pixel_keywords: input.keywords, pixel_card_url: cardUrl, pixel_card_id: input.cardId })
+      .eq('id', input.userId);
+    error = fallback.error;
+  }
   if (error) throw new Error(error.message);
+  invalidateMyCardsCache(input.userId);
   return {
     id: input.cardId,
     avatarUrl,
@@ -68,8 +82,9 @@ async function saveDirectlyToSupabase(input: SavePixelProfileInput): Promise<Sav
 }
 
 export async function savePixelProfile(input: SavePixelProfileInput): Promise<SavePixelProfileResult> {
+  let response: Response;
   try {
-    const response = await fetch('/api/experience-cards', {
+    response = await fetch('/api/experience-cards', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${input.accessToken}`,
@@ -83,13 +98,25 @@ export async function savePixelProfile(input: SavePixelProfileInput): Promise<Sa
       }),
     });
 
-    const contentType = response.headers.get('content-type') ?? '';
-    if (response.ok && contentType.includes('application/json')) {
-      return (await response.json()) as SavePixelProfileResult;
-    }
   } catch {
-    // Local Vite and Vercel do not expose Cloudflare Pages Functions.
+    // Local Vite has no Pages Functions; a network failure is also safe to handle directly.
+    return saveDirectlyToSupabase(input);
   }
 
-  return saveDirectlyToSupabase(input);
+  const contentType = response.headers.get('content-type') ?? '';
+  if (response.ok && contentType.includes('application/json')) {
+    const result = (await response.json()) as SavePixelProfileResult;
+    invalidateMyCardsCache(input.userId);
+    return result;
+  }
+  if (response.status === 404 && contentType.includes('text/html')) {
+    // The local app does not expose Pages Functions; production JSON errors never reach this path.
+    return saveDirectlyToSupabase(input);
+  }
+  let message = `像素名片保存失败（${response.status}）`;
+  if (contentType.includes('application/json')) {
+    const payload = await response.json().catch(() => null) as { error?: string } | null;
+    if (payload?.error) message = payload.error;
+  }
+  throw new Error(message);
 }

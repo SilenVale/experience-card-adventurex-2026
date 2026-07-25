@@ -80,6 +80,17 @@
   --shadow-nav: 0 1px 2px rgba(0, 0, 0, 0.12);
 }
 
+@keyframes profile-card-fly-in {
+  from { opacity: 0; transform: translate3d(90px, 26px, 0) rotate(3deg) scale(0.96); filter: blur(6px); }
+  to { opacity: 1; transform: translate3d(0, 0, 0) rotate(0deg) scale(1); filter: blur(0); }
+}
+
+.profile-card-fly-in { animation: profile-card-fly-in 760ms cubic-bezier(.2,.8,.2,1) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .profile-card-fly-in { animation: none; }
+}
+
 /* ================================================================
    Base Styles
    ================================================================ */

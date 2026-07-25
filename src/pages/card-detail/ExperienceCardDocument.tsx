@@ -59,7 +59,7 @@ export default function ExperienceCardDocument({
             </span>
             <span className="ml-auto hidden items-center gap-1.5 text-[10px] text-theme-text-secondary sm:flex">
               <i className="ri-verified-badge-line text-theme-accent" />
-              作者确认的真实经历
+              经验来源声明
             </span>
           </div>
 
@@ -210,6 +210,7 @@ export default function ExperienceCardDocument({
             </div>
           </section>
 
+          {detail.microAction && (
           <section className="mb-3 rounded-[18px] border border-theme-gold-light bg-theme-gold-subtle px-5 py-4">
             <div className="flex items-start gap-3">
               <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-theme-bg-card text-theme-gold-dark">
@@ -221,6 +222,7 @@ export default function ExperienceCardDocument({
               </div>
             </div>
           </section>
+          )}
 
           <div className="grid gap-2 sm:grid-cols-2">
             <button

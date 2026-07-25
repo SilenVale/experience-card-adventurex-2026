@@ -54,7 +54,7 @@ function fromRecord(card: ExperienceCardRecord): Detail {
     suitableFor: card.suitable_for || '请带着自己的具体情境判断是否适用。',
     boundary: card.boundary || '作者尚未补充使用边界，请谨慎试用。',
     pitfall: card.pitfall || '作者尚未补充失败调整；这不代表这段经验在所有情境下都有效。',
-    microAction: '带着你的具体限制，点击下方按钮先试一个最小行动。',
+    microAction: card.micro_action ?? '',
     source: '作者主动提交的真实经历',
     scope: '公开范围：可匿名试用',
     boundaryNote: '请先从微行动开始验证，不要在条件不同的情况下直接照搬。',

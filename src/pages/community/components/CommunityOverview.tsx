@@ -38,10 +38,10 @@ export default function CommunityOverview({
       <div className="grid gap-4 lg:grid-cols-[1.55fr_0.75fr]">
         <article className="ui-motion relative overflow-hidden rounded-[24px] border border-theme-border bg-theme-bg-card p-3 shadow-[0_18px_60px_rgba(89,52,43,0.07)] md:p-4">
           <div className="absolute right-10 top-6 hidden h-6 w-20 rotate-[5deg] rounded-full border-[3px] border-theme-text-muted/35 md:block" />
-          <div className="relative rotate-[-0.4deg] rounded-[18px] border border-theme-border bg-[#FFFCF8] px-5 pb-5 pt-6 shadow-[0_12px_30px_rgba(78,44,37,0.08)] md:px-8 md:pb-7">
+          <div className="relative rotate-[-0.4deg] rounded-[18px] border border-theme-border bg-theme-bg-card-alt px-5 pb-5 pt-6 shadow-[0_12px_30px_rgba(78,44,37,0.08)] md:px-8 md:pb-7">
             <div className="absolute bottom-7 left-3 top-7 flex flex-col justify-between md:left-4">
               {[0, 1, 2, 3, 4].map((hole) => (
-                <span key={hole} className="h-2.5 w-2.5 rounded-full bg-[#D9CDC1]/70" />
+                <span key={hole} className="h-2.5 w-2.5 rounded-full bg-theme-border" />
               ))}
             </div>
 
@@ -105,7 +105,7 @@ export default function CommunityOverview({
 
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
             <button
-              onClick={onJoinTask}
+            onClick={onJoinTask}
               className="flex cursor-pointer items-center justify-center gap-2 rounded-full border border-theme-text/15 py-3 text-sm font-semibold text-theme-text transition-colors hover:bg-theme-bg-card-alt"
             >
               <i className="ri-user-add-line" />

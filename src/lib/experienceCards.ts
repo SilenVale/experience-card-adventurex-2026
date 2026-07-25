@@ -14,6 +14,7 @@ export interface ExperienceCardRecord {
   result: string;
   suitable_for: string;
   boundary: string;
+  micro_action?: string | null;
   source_map: Record<string, string[]>;
   sharing_consent: boolean;
   is_public: boolean;
@@ -33,6 +34,7 @@ export interface SaveExperienceCardInput {
   result: string;
   suitableFor: string;
   boundary: string;
+  microAction?: string | null;
   sourceMap: Record<string, string[]>;
   sharingConsent: boolean;
   status: CardStatus;
@@ -79,6 +81,7 @@ const cardFields = [
   'result',
   'suitable_for',
   'boundary',
+  'micro_action',
   'source_map',
   'sharing_consent',
   'is_public',
@@ -135,6 +138,7 @@ export async function saveExperienceCard(input: SaveExperienceCardInput) {
       result: input.result,
       suitable_for: input.suitableFor,
       boundary: input.boundary,
+      micro_action: input.microAction?.trim() || null,
       source_map: input.sourceMap,
       sharing_consent: input.sharingConsent,
       is_public: input.status === 'published',
@@ -160,6 +164,7 @@ export async function updateExperienceCard(cardId: string, input: SaveExperience
       result: input.result,
       suitable_for: input.suitableFor,
       boundary: input.boundary,
+      micro_action: input.microAction?.trim() || null,
       source_map: input.sourceMap,
       sharing_consent: input.sharingConsent,
       is_public: input.status === 'published',

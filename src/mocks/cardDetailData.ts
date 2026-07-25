@@ -1,3 +1,5 @@
+import { experienceCards } from './homeData';
+
 export interface CardDetailData {
   id: string;
   title: string;
@@ -203,3 +205,33 @@ export const galleryToDetailMap: Record<string, string> = {
   '7': 'persona-04',
   '8': 'persona-03',
 };
+
+// Make every gallery card open a complete, clearly labelled public-practice detail page.
+experienceCards.forEach((card) => {
+  if (cardDetails[card.id]) return;
+  cardDetails[card.id] = {
+    id: card.id,
+    title: card.title,
+    author: '公开实践样本',
+    authorIdentity: '基于公开方法整理的匿名实践样本',
+    status: '公开样本 · 可试用',
+    version: card.status,
+    problem: `常见情境：${card.description}`,
+    keyActions: [
+      { step: 1, action: `先确认“${card.tags[0]}”的具体情境`, detail: '写下当前限制、已有尝试和希望看到的变化。' },
+      { step: 2, action: `只做一个最小动作：${card.tags[1]}`, detail: '把目标压缩到今天能留下结果的一步，不同时推进多个方案。' },
+      { step: 3, action: '记录结果并调整', detail: '观察哪里有效、哪里卡住，再决定下一轮是否继续或换法。' },
+    ],
+    result: `${card.description} 这张样本卡把经验拆成可判断、可试用的一小步，实际效果需要结合你的条件验证。`,
+    suitableFor: `正在面对“${card.tags[0]}”问题、希望先试一个低风险动作的人。`,
+    boundary: card.boundaryTag,
+    pitfall: '不要把公开样本当成对所有人都有效的标准答案；如果条件不同，先缩小动作并记录差异。',
+    boundaryNote: `适用边界：${card.boundaryTag}。如果你的情况更复杂，请先寻求相关专业意见。`,
+    microAction: `今天用 15 分钟写下你的具体情境，并完成一个与“${card.tags[1]}”相关的最小动作。`,
+    versionHistory: { v1: '公开实践样本初稿', feedback: ['这一步在我的情境里是否可行？', '下一轮最应该调整哪一个条件？'], v2: '等待真实使用者反馈后更新。' },
+    source: '公开实践整理 · 非特定用户的真实经历声明',
+    scope: '公开范围：可匿名试用',
+    personaId: 'sample',
+  };
+  galleryToDetailMap[card.id] = card.id;
+});
