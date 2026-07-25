@@ -34,7 +34,7 @@ export default function MyCardsPage() {
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
-  const fetchCards = useCallback(async () => {
+  const fetchCards = useCallback(async (force = false) => {
     if (!user) {
       setCards([]);
       setFeedback([]);
@@ -44,15 +44,17 @@ export default function MyCardsPage() {
     }
 
     let hasCachedData = false;
-    try {
-      const cached = sessionStorage.getItem(cacheKey(user.id));
-      if (cached) {
-        const parsed = JSON.parse(cached) as { cards?: ExperienceCardRecord[]; profile?: ProfileRecord | null; feedback?: TrialFeedbackRecord[] };
-        if (parsed.cards && parsed.feedback && 'profile' in parsed) {
-          setCards(parsed.cards); setProfile(parsed.profile ?? null); setFeedback(parsed.feedback); hasCachedData = true;
+    if (!force) {
+      try {
+        const cached = sessionStorage.getItem(cacheKey(user.id));
+        if (cached) {
+          const parsed = JSON.parse(cached) as { cards?: ExperienceCardRecord[]; profile?: ProfileRecord | null; feedback?: TrialFeedbackRecord[] };
+          if (parsed.cards && parsed.feedback && 'profile' in parsed) {
+            setCards(parsed.cards); setProfile(parsed.profile ?? null); setFeedback(parsed.feedback); hasCachedData = true;
+          }
         }
-      }
-    } catch { /* stale cache never blocks a live request */ }
+      } catch { /* stale cache never blocks a live request */ }
+    }
     if (!hasCachedData) setLoading(true);
     setError(null);
 
@@ -81,11 +83,19 @@ export default function MyCardsPage() {
     const handleProfileUpdated = (event: Event) => {
       const detail = (event as CustomEvent<{ userId?: string }>).detail;
       if (!user || detail?.userId !== user.id) return;
-      void fetchCards();
+      void fetchCards(true);
     };
     window.addEventListener('experience-card:profile-updated', handleProfileUpdated);
     return () => window.removeEventListener('experience-card:profile-updated', handleProfileUpdated);
   }, [fetchCards, user]);
+
+  useEffect(() => {
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) void fetchCards(true);
+    };
+    window.addEventListener('pageshow', handlePageShow);
+    return () => window.removeEventListener('pageshow', handlePageShow);
+  }, [fetchCards]);
 
   useEffect(() => {
     return () => {
@@ -200,7 +210,7 @@ export default function MyCardsPage() {
           {error && user && (
             <div className="bg-theme-accent-subtle border border-theme-accent-light rounded-xl px-4 py-3 mb-6 text-xs text-theme-accent flex items-center gap-2">
               <span>读取失败：{error}</span>
-              <button onClick={fetchCards} className="underline cursor-pointer whitespace-nowrap">重试</button>
+              <button onClick={() => void fetchCards(true)} className="underline cursor-pointer whitespace-nowrap">重试</button>
             </div>
           )}
 
@@ -246,7 +256,7 @@ export default function MyCardsPage() {
                       </span>
                       <span className="w-14 h-14 md:w-20 md:h-20 rounded-2xl bg-theme-bg-card-alt border border-theme-border-accent overflow-hidden flex items-center justify-center">
                         {profileAvatarUrl ? (
-                          <img src={profileAvatarUrl} alt={`${displayName} 的头像`} className="w-full h-full object-cover" />
+                          <img key={profileAvatarUrl} src={profileAvatarUrl} alt={`${displayName} 的头像`} className="w-full h-full object-cover" />
                         ) : (
                           <span className="font-heading font-black text-xl md:text-2xl text-theme-accent">{avatarFallback}</span>
                         )}
@@ -290,7 +300,7 @@ export default function MyCardsPage() {
                     <div className="relative flex-shrink-0">
                       <div className="w-24 h-24 rounded-[24px] bg-theme-bg-card-alt border border-theme-border-accent overflow-hidden flex items-center justify-center">
                         {profileAvatarUrl ? (
-                          <img src={profileAvatarUrl} alt={`${displayName} 的头像`} className="w-full h-full object-cover" />
+                          <img key={profileAvatarUrl} src={profileAvatarUrl} alt={`${displayName} 的头像`} className="w-full h-full object-cover" />
                         ) : (
                           <span className="font-heading font-black text-3xl text-theme-accent">{avatarFallback}</span>
                         )}
@@ -365,6 +375,7 @@ export default function MyCardsPage() {
                     <div className={`relative mt-5 pt-5 border-t ${themeBorder}`}>
                       <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                         <img
+                          key={profile.pixel_card_url}
                           src={profile.pixel_card_url}
                           alt="我的像素经验名片"
                           className="w-full sm:w-52 aspect-video object-cover rounded-xl border border-theme-border-accent"

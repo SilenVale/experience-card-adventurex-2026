@@ -81,4 +81,35 @@ export async function uploadPng(config, token, path, bytes) {
   return `${config.url}/storage/v1/object/public/experience-card-assets/${path}`;
 }
 
+export function storagePathFromPublicUrl(config, userId, value, folder) {
+  if (typeof value !== 'string' || (folder !== 'avatars' && folder !== 'cards')) return null;
+  let parsed;
+  try { parsed = new URL(value); } catch { return null; }
+  const prefix = `/storage/v1/object/public/experience-card-assets/${userId}/${folder}/`;
+  if (parsed.origin !== config.url || !parsed.pathname.startsWith(prefix)) return null;
+  const filename = parsed.pathname.slice(prefix.length);
+  if (!filename || filename.includes('/') || filename.includes('\\')) return null;
+  try {
+    const decoded = decodeURIComponent(filename);
+    if (!decoded || decoded.includes('/') || decoded.includes('\\')) return null;
+    return `${userId}/${folder}/${decoded}`;
+  } catch {
+    return null;
+  }
+}
+
+export async function removePng(config, token, paths) {
+  if (!paths.length) return true;
+  const response = await fetch(`${config.url}/storage/v1/object/experience-card-assets`, {
+    method: 'DELETE',
+    headers: {
+      apikey: config.anonKey,
+      Authorization: `Bearer ${token}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({ prefixes: paths }),
+  });
+  return response.ok || response.status === 404;
+}
+
 export { ID_PATTERN };

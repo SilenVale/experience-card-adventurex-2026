@@ -251,6 +251,7 @@ export default function PixelPortraitPage() {
   const animationRef = useRef(0);
   const segmentingRef = useRef(false);
   const lastSegmentRef = useRef(0);
+  const segmentIntervalRef = useRef(100);
   const settingsRef = useRef<PixelSettings>({
     pixelSize: 7,
     contrast: 122,
@@ -263,6 +264,8 @@ export default function PixelPortraitPage() {
 
   const [profile, setProfile] = useState<ProfileRecord | null>(null);
   const [cards, setCards] = useState<ExperienceCardRecord[]>([]);
+  const [cardsLoading, setCardsLoading] = useState(true);
+  const [cardsLoadError, setCardsLoadError] = useState(false);
   const [phase, setPhase] = useState<Phase>('capture');
   const [running, setRunning] = useState(false);
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
@@ -271,25 +274,31 @@ export default function PixelPortraitPage() {
   const [error, setError] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
   const [keywordsText, setKeywordsText] = useState('公开构建, 真实经验, AdventureX');
+  const [cardTitle, setCardTitle] = useState('');
+  const [cardSummary, setCardSummary] = useState('');
   const [avatarDataUrl, setAvatarDataUrl] = useState('');
   const [cardDataUrl, setCardDataUrl] = useState('');
   const [downloadUrl, setDownloadUrl] = useState('');
   const [saving, setSaving] = useState(false);
+  const [savedToProfile, setSavedToProfile] = useState(false);
   const [settings, setSettings] = useState<PixelSettings>(settingsRef.current);
   const [frameColor, setFrameColor] = useState('#f6f3ed');
 
-  const latestCard = useMemo(
-    () => cards.find((card) => card.status === 'published') ?? cards[0] ?? null,
-    [cards],
-  );
+  const latestCard = useMemo(() => {
+    const usableCards = cards.filter((card) => card.title?.trim());
+    // listMyExperienceCards is ordered by updated_at descending; use the newest
+    // usable card so a newly saved draft is not silently replaced by an older
+    // published card.
+    return usableCards[0] ?? null;
+  }, [cards]);
   const displayName = profile?.display_name?.trim() || user?.email?.split('@')[0] || '经验分享者';
   const keywords = useMemo(() => parseKeywords(keywordsText), [keywordsText]);
 
   const profileContent = useMemo(() => ({
     name: displayName,
     role: latestCard ? 'Experience Card 经验贡献者' : 'Experience Card 共创者',
-    title: latestCard?.title || '把一件真实做成过的事，留给下一个人。',
-    summary: latestCard?.one_liner || '我把此刻做成了一张可以分享、也可以继续更新的经验名片。',
+    title: latestCard?.title.trim() || '',
+    summary: latestCard?.one_liner?.trim() || latestCard?.result?.trim() || '',
     slogan: '让经验成为彼此的下一步',
   }), [displayName, latestCard]);
 
@@ -306,13 +315,13 @@ export default function PixelPortraitPage() {
     }
   }, []);
 
-  const stopCamera = useCallback(async () => {
+  const stopCamera = useCallback(async (preserveStatus = false) => {
     window.cancelAnimationFrame(animationRef.current);
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
     setRunning(false);
-    setStatus('镜头已关闭');
+    if (!preserveStatus) setStatus('镜头已关闭');
   }, []);
 
   const renderLoop = useCallback((now: number) => {
@@ -320,12 +329,18 @@ export default function PixelPortraitPage() {
     const segmenter = segmenterRef.current;
     if (!video || !segmenter || !streamRef.current) return;
 
-    if (!segmentingRef.current && video.videoWidth && now - lastSegmentRef.current > 78) {
+    if (!segmentingRef.current && video.videoWidth && now - lastSegmentRef.current > segmentIntervalRef.current) {
       lastSegmentRef.current = now;
       segmentingRef.current = true;
+      const startedAt = performance.now();
       segmenter.send({ image: video })
         .catch(() => undefined)
-        .finally(() => { segmentingRef.current = false; });
+        .finally(() => {
+          const elapsed = performance.now() - startedAt;
+          // Avoid queueing another expensive MediaPipe pass while a phone is busy.
+          segmentIntervalRef.current = Math.max(100, Math.min(180, elapsed * 1.25));
+          segmentingRef.current = false;
+        });
     }
     animationRef.current = window.requestAnimationFrame(renderLoop);
   }, []);
@@ -423,17 +438,43 @@ export default function PixelPortraitPage() {
   }, [phase, startCamera]);
 
   useEffect(() => {
-    if (!user) return;
+    let cancelled = false;
+    setCardsLoading(true);
+    setCardsLoadError(false);
+    setCards([]);
+    if (!user) {
+      setProfile(null);
+      setCardsLoading(false);
+      return () => { cancelled = true; };
+    }
+
     Promise.all([getMyProfile(user.id), listMyExperienceCards(user.id)])
       .then(([profileData, cardData]) => {
+        if (cancelled) return;
         setProfile(profileData);
         setCards(cardData);
         if (profileData?.pixel_keywords?.length) {
           setKeywordsText(profileData.pixel_keywords.join(', '));
         }
       })
-      .catch(() => undefined);
+      .catch(() => {
+        if (cancelled) return;
+        setCardsLoadError(true);
+        setStatus('无法读取你的最新经验卡，请刷新后重试');
+        setError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setCardsLoading(false);
+      });
+
+    return () => { cancelled = true; };
   }, [user]);
+
+  useEffect(() => {
+    if (phase !== 'keywords' || !latestCard) return;
+    setCardTitle((current) => current || profileContent.title);
+    setCardSummary((current) => current || profileContent.summary);
+  }, [latestCard, phase, profileContent.title, profileContent.summary]);
 
   const capture = () => {
     const portrait = portraitCanvasRef.current;
@@ -447,6 +488,8 @@ export default function PixelPortraitPage() {
     avatar.getContext('2d')?.drawImage(portrait, 0, 0);
     avatarCanvasRef.current = avatar;
     setAvatarDataUrl(avatar.toDataURL('image/png'));
+    setCardTitle(profileContent.title);
+    setCardSummary(profileContent.summary);
     setPhase('keywords');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -488,7 +531,7 @@ export default function PixelPortraitPage() {
     context.fillText('一张真实经验的现场头像', 740, 248);
     context.fillStyle = '#0a0a0c';
     context.font = '800 64px sans-serif';
-    wrapCanvasText(context, profileContent.title, 700, 3)
+    wrapCanvasText(context, cardTitle, 700, 3)
       .forEach((line, index) => context.fillText(line, 740, 340 + index * 78));
     context.fillStyle = '#765755';
     context.font = '400 28px sans-serif';
@@ -514,7 +557,7 @@ export default function PixelPortraitPage() {
 
     if (officialQrRef.current) drawQr(officialQrRef.current, OFFICIAL_WEBSITE_URL, 132);
     if (downloadQrRef.current) drawQr(downloadQrRef.current, targetDownloadUrl, 132);
-  }, [frameColor, keywords, profileContent]);
+  }, [cardTitle, frameColor, keywords, profileContent]);
 
   const generateCard = async () => {
     if (!user || !session?.access_token) {
@@ -526,9 +569,20 @@ export default function PixelPortraitPage() {
       setError(true);
       return;
     }
+    if (cardsLoading) {
+      setStatus('正在读取你的最新经验卡，请稍候');
+      setError(false);
+      return;
+    }
+    if (cardsLoadError || !latestCard || !cardTitle.trim() || !cardSummary.trim()) {
+      setStatus(cardsLoadError ? '最新经验卡读取失败，请刷新后重试' : '请先创建并保存一张经验卡');
+      setError(true);
+      return;
+    }
 
     setSaving(true);
     setError(false);
+    setSavedToProfile(false);
     setStatus('正在生成并保存你的像素经验名片…');
     const cardId = user.id.replaceAll('-', '');
     // The QR points to a download response so a phone can save the PNG directly.
@@ -541,7 +595,7 @@ export default function PixelPortraitPage() {
       if (!cardCanvas) throw new Error('经验卡画布不可用');
       const nextCardDataUrl = cardCanvas.toDataURL('image/png');
       setCardDataUrl(nextCardDataUrl);
-      await savePixelProfile({
+      const saveResult = await savePixelProfile({
         userId: user.id,
         accessToken: session.access_token,
         cardId,
@@ -549,7 +603,10 @@ export default function PixelPortraitPage() {
         cardDataUrl: nextCardDataUrl,
         keywords,
       });
-      setStatus('已保存到“我的名片”，可以下载或重新生成');
+      setStatus(saveResult.removedPrevious
+        ? '已替换“我的名片”中的旧头像和旧成片，可以下载或重新生成'
+        : '新头像和成片已保存，但旧文件清理失败；当前名片已使用新版本');
+      setSavedToProfile(true);
       setPhase('result');
     } catch (saveError) {
       setStatus(saveError instanceof Error ? `成片已生成，但云端保存失败：${saveError.message}` : '云端保存失败');
@@ -557,7 +614,7 @@ export default function PixelPortraitPage() {
       setPhase('result');
     } finally {
       setSaving(false);
-      await stopCamera();
+      await stopCamera(true);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
@@ -566,6 +623,9 @@ export default function PixelPortraitPage() {
     setAvatarDataUrl('');
     setCardDataUrl('');
     setDownloadUrl('');
+    setSavedToProfile(false);
+    setCardTitle('');
+    setCardSummary('');
     autoStartCameraRef.current = true;
     setPhase('capture');
     setStatus('正在重新开启镜头…');
@@ -573,7 +633,7 @@ export default function PixelPortraitPage() {
   };
 
   const copyXiaohongshuText = async () => {
-    const text = `把今天做成了一张像素经验名片。\n\n${profileContent.title}\n\n${profileContent.summary}\n\n${keywords.map((keyword) => `#${keyword}`).join(' ')} #ExperienceCard #BuildInPublic\n\n${downloadUrl || OFFICIAL_WEBSITE_URL}`;
+    const text = `把今天做成了一张像素经验名片。\n\n${cardTitle}\n\n${cardSummary}\n\n${keywords.map((keyword) => `#${keyword}`).join(' ')} #ExperienceCard #BuildInPublic\n\n${downloadUrl || OFFICIAL_WEBSITE_URL}`;
     try {
       await navigator.clipboard.writeText(text);
       setStatus('小红书发布文案已复制');
@@ -616,6 +676,14 @@ export default function PixelPortraitPage() {
                   <p className="pixel-eyebrow">EXPERIENCE CARD</p>
                   <h1 id="pixel-title">像素档案室</h1>
                 </div>
+                <button
+                  type="button"
+                  className="pixel-button pixel-capture pixel-header-capture"
+                  onClick={capture}
+                  disabled={!running}
+                >
+                  截图，制作经验名片 →
+                </button>
               </header>
 
               <section className="pixel-tool-section">
@@ -634,7 +702,7 @@ export default function PixelPortraitPage() {
                 </div>
                 <div className="pixel-button-row">
                   <button type="button" className="pixel-button pixel-primary" onClick={startCamera} disabled={running}>开启镜头</button>
-                  <button type="button" className="pixel-button pixel-secondary" onClick={stopCamera} disabled={!running}>关闭</button>
+                  <button type="button" className="pixel-button pixel-secondary" onClick={() => void stopCamera()} disabled={!running}>关闭</button>
                 </div>
               </section>
 
@@ -661,7 +729,6 @@ export default function PixelPortraitPage() {
               <section className="pixel-tool-section pixel-capture-section">
                 <div className="pixel-section-label"><span>03</span><h2>生成档案</h2></div>
                 <p>截图会以像素效果保存为头像，并带入当前登录用户的真实经验名片。</p>
-                <button type="button" className="pixel-button pixel-capture" onClick={capture} disabled={!running}>截图，制作经验名片 →</button>
                 <p className={`pixel-status ${error ? 'is-error' : ''}`} role="status">{status}</p>
               </section>
             </aside>
@@ -678,14 +745,40 @@ export default function PixelPortraitPage() {
               <div className="pixel-edit-portrait" style={{ '--pixel-frame-color': frameColor } as React.CSSProperties}><img src={avatarDataUrl} alt="刚才截取的像素头像" /></div>
               <div className="pixel-keyword-form">
                 <p className="pixel-eyebrow">使用当前登录用户与最新经验卡内容</p>
-                <h2>{profileContent.title}</h2>
-                <p>{profileContent.summary}</p>
+                {cardsLoading ? (
+                  <p className="pixel-card-source-status">正在读取你的最新经验卡…</p>
+                ) : latestCard ? (
+                  <>
+                    <label htmlFor="pixel-card-title">经验卡标题（可修改）</label>
+                    <input
+                      id="pixel-card-title"
+                      type="text"
+                      maxLength={120}
+                      value={cardTitle}
+                      onChange={(event) => setCardTitle(event.target.value)}
+                      placeholder="输入这张像素名片要展示的标题"
+                    />
+                    <label htmlFor="pixel-card-summary">一句话摘要 / 适用情境（可修改）</label>
+                    <textarea
+                      id="pixel-card-summary"
+                      rows={3}
+                      maxLength={240}
+                      value={cardSummary}
+                      onChange={(event) => setCardSummary(event.target.value)}
+                      placeholder="输入这张像素名片要展示的摘要"
+                    />
+                  </>
+                ) : (
+                  <p className="pixel-card-source-status">
+                    {cardsLoadError ? '最新经验卡读取失败，请刷新后重试。' : '还没有可带入的经验卡，请先创建并保存一张经验卡。'}
+                  </p>
+                )}
                 <label htmlFor="pixel-keywords">经验关键词</label>
                 <input id="pixel-keywords" type="text" maxLength={90} value={keywordsText} onChange={(event) => setKeywordsText(event.target.value)} placeholder="例如：第一次做项目、社群招新、AI 工具" />
                 <div className="pixel-keyword-preview">
                   {keywords.map((keyword) => <span key={keyword}>#{keyword}</span>)}
                 </div>
-                <button type="button" className="pixel-button pixel-primary" onClick={generateCard} disabled={saving}>
+                <button type="button" className="pixel-button pixel-primary" onClick={generateCard} disabled={saving || cardsLoading || !latestCard || cardsLoadError}>
                   {saving ? '正在保存…' : '生成并保存到我的名片 →'}
                 </button>
                 <p className={`pixel-status ${error ? 'is-error' : ''}`} role="status">{status}</p>
@@ -702,7 +795,7 @@ export default function PixelPortraitPage() {
             </header>
             <div className="pixel-result-card"><img src={cardDataUrl} alt="横向 Experience Card 成片" /></div>
             <div className="pixel-result-meta">
-              <p>头像与成片已写入“我的名片”。原始摄像头画面没有上传。</p>
+              <p>{savedToProfile ? '头像与成片已写入“我的名片”。原始摄像头画面没有上传。' : '成片已在本地生成，但还没有写入“我的名片”。原始摄像头画面没有上传。'}</p>
               <div className="pixel-result-codes">
                 <figure><canvas ref={officialQrRef} /><figcaption>扫码打开 Experience Card 官网</figcaption></figure>
                 <figure><canvas ref={downloadQrRef} /><figcaption>扫码直接下载这张经验现场头像</figcaption></figure>
