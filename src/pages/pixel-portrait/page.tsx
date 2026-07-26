@@ -574,8 +574,8 @@ export default function PixelPortraitPage() {
       setError(false);
       return;
     }
-    if (cardsLoadError || !latestCard || !cardTitle.trim() || !cardSummary.trim()) {
-      setStatus(cardsLoadError ? '最新经验卡读取失败，请刷新后重试' : '请先创建并保存一张经验卡');
+    if (!cardTitle.trim() || !cardSummary.trim()) {
+      setStatus('请填写经验卡标题和一句话摘要');
       setError(true);
       return;
     }
@@ -744,41 +744,33 @@ export default function PixelPortraitPage() {
             <div className="pixel-edit-layout">
               <div className="pixel-edit-portrait" style={{ '--pixel-frame-color': frameColor } as React.CSSProperties}><img src={avatarDataUrl} alt="刚才截取的像素头像" /></div>
               <div className="pixel-keyword-form">
-                <p className="pixel-eyebrow">使用当前登录用户与最新经验卡内容</p>
-                {cardsLoading ? (
-                  <p className="pixel-card-source-status">正在读取你的最新经验卡…</p>
-                ) : latestCard ? (
-                  <>
-                    <label htmlFor="pixel-card-title">经验卡标题（可修改）</label>
-                    <input
-                      id="pixel-card-title"
-                      type="text"
-                      maxLength={120}
-                      value={cardTitle}
-                      onChange={(event) => setCardTitle(event.target.value)}
-                      placeholder="输入这张像素名片要展示的标题"
-                    />
-                    <label htmlFor="pixel-card-summary">一句话摘要 / 适用情境（可修改）</label>
-                    <textarea
-                      id="pixel-card-summary"
-                      rows={3}
-                      maxLength={240}
-                      value={cardSummary}
-                      onChange={(event) => setCardSummary(event.target.value)}
-                      placeholder="输入这张像素名片要展示的摘要"
-                    />
-                  </>
-                ) : (
-                  <p className="pixel-card-source-status">
-                    {cardsLoadError ? '最新经验卡读取失败，请刷新后重试。' : '还没有可带入的经验卡，请先创建并保存一张经验卡。'}
-                  </p>
-                )}
+                <p className="pixel-eyebrow">{latestCard ? '已带入最近一张经验卡，可自由修改' : '没有经验卡也可以直接填写体验'}</p>
+                {cardsLoading && <p className="pixel-card-source-status">正在读取你的最近一张经验卡…</p>}
+                {cardsLoadError && <p className="pixel-card-source-status">经验卡读取失败，你仍然可以手动填写。</p>}
+                <label htmlFor="pixel-card-title">经验卡标题（可修改）</label>
+                <input
+                  id="pixel-card-title"
+                  type="text"
+                  maxLength={120}
+                  value={cardTitle}
+                  onChange={(event) => setCardTitle(event.target.value)}
+                  placeholder="输入这张像素名片要展示的标题"
+                />
+                <label htmlFor="pixel-card-summary">一句话摘要 / 适用情境（可修改）</label>
+                <textarea
+                  id="pixel-card-summary"
+                  rows={3}
+                  maxLength={240}
+                  value={cardSummary}
+                  onChange={(event) => setCardSummary(event.target.value)}
+                  placeholder="输入这张像素名片要展示的摘要"
+                />
                 <label htmlFor="pixel-keywords">经验关键词</label>
                 <input id="pixel-keywords" type="text" maxLength={90} value={keywordsText} onChange={(event) => setKeywordsText(event.target.value)} placeholder="例如：第一次做项目、社群招新、AI 工具" />
                 <div className="pixel-keyword-preview">
                   {keywords.map((keyword) => <span key={keyword}>#{keyword}</span>)}
                 </div>
-                <button type="button" className="pixel-button pixel-primary" onClick={generateCard} disabled={saving || cardsLoading || !latestCard || cardsLoadError}>
+                <button type="button" className="pixel-button pixel-primary" onClick={generateCard} disabled={saving || cardsLoading}>
                   {saving ? '正在保存…' : '生成并保存到我的名片 →'}
                 </button>
                 <p className={`pixel-status ${error ? 'is-error' : ''}`} role="status">{status}</p>
